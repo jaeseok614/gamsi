@@ -28,6 +28,7 @@ import {
   WeeklyScheduleBoard
 } from "@/components/dashboard-advanced-actions";
 import { OrganizationPanel } from "@/components/organization-panel";
+import { GroupwarePanel } from "@/components/groupware-panel";
 import {
   ActiveSessionsPanel,
   ApprovalButtons,
@@ -58,6 +59,7 @@ import { getApprovalInbox, getApprovalRelatedSchedule } from "@/lib/approvals";
 import { canAdminSettings, canManage, canViewReports, getCurrentAuthSession, requireCurrentUser } from "@/lib/auth";
 import { getAttendanceSnapshot } from "@/lib/attendance";
 import { getDashboardPersonalization } from "@/lib/dashboard-personalization";
+import { getGroupwareDashboard } from "@/lib/groupware";
 import { getAnnualLeaveSummaryForUser } from "@/lib/leave";
 import { getManagerDashboard } from "@/lib/manager";
 import { getNotificationCenter } from "@/lib/notifications";
@@ -378,7 +380,7 @@ type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type DashboardView = "employee" | "organization" | "workbox" | "notifications" | "risk" | "approvals" | "reports" | "settings";
+type DashboardView = "employee" | "groupware" | "organization" | "workbox" | "notifications" | "risk" | "approvals" | "reports" | "settings";
 type NotificationGroupParam = "ALL" | "APPROVAL" | "LEAVE" | "MISSING" | "MONTH_CLOSE" | "OTHER";
 type RiskStatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED" | "DISMISSED";
 type RiskTypeFilter =
@@ -430,6 +432,13 @@ function dashboardViewMeta(view: DashboardView) {
     return {
       title: "업무함",
       description: "승인, 리스크, 월마감 업무를 댓글과 멘션으로 함께 처리합니다."
+    };
+  }
+
+  if (view === "groupware") {
+    return {
+      title: "그룹웨어",
+      description: "연락처, 메모, 급여명세를 한 화면에서 처리합니다."
     };
   }
 
@@ -606,6 +615,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     filter: rawWorkboxFilter,
     threadId: workThreadId
   });
+  const groupwareData = await getGroupwareDashboard(user);
   const currentPolicy = await getCurrentWorkPolicy(user.companyId);
   const snapshot = await getAttendanceSnapshot(user.id);
   const employeeScheduleBoard = await getEmployeeScheduleBoard(user.id);
@@ -701,6 +711,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     : null;
   const availableViews: DashboardView[] = [
     "employee",
+    "groupware",
     "organization",
     "workbox",
     "notifications",
@@ -737,6 +748,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             style={{ fontWeight: activeView === "employee" ? 700 : 500, color: activeView === "employee" ? "#1e3a8a" : undefined }}
           >
             근로기록
+          </Link>
+          <Link
+            href={dashboardViewHref("groupware")}
+            aria-current={activeView === "groupware" ? "page" : undefined}
+            style={{ fontWeight: activeView === "groupware" ? 700 : 500, color: activeView === "groupware" ? "#1e3a8a" : undefined }}
+          >
+            그룹웨어
           </Link>
           <Link
             href={dashboardViewHref("organization")}
@@ -858,6 +876,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {activeView === "organization" ? (
           <section id="organization" className="stack" style={{ marginBottom: 18 }}>
             <OrganizationPanel summary={organizationData} />
+          </section>
+        ) : null}
+
+        {activeView === "groupware" ? (
+          <section id="groupware" className="stack" style={{ marginBottom: 18 }}>
+            <GroupwarePanel
+              organization={organizationData}
+              groupware={groupwareData}
+              mentionableUsers={workboxData.mentionableUsers}
+              assignableUsers={workboxData.assignableUsers}
+              viewerId={user.id}
+            />
           </section>
         ) : null}
 

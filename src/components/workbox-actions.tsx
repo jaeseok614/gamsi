@@ -108,6 +108,9 @@ function targetTypeLabel(type: string) {
   if (type === "RISK_SIGNAL") {
     return "리스크";
   }
+  if (type === "USER_PROFILE") {
+    return "메모";
+  }
   return "월마감";
 }
 

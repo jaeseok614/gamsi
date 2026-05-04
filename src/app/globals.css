@@ -665,6 +665,13 @@ td {
   align-items: start;
 }
 
+.groupware-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
 .org-team-card {
   padding: 14px;
 }
@@ -908,6 +915,7 @@ td {
   .app-shell,
   .workbox-layout,
   .organization-layout,
+  .groupware-layout,
   .split,
   .grid-2,
   .grid-3,

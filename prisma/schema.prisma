@@ -169,6 +169,7 @@ enum WorkThreadTargetType {
   APPROVAL_REQUEST
   RISK_SIGNAL
   MONTH_CLOSE
+  USER_PROFILE
 }
 
 enum WorkThreadStatus {

@@ -198,7 +198,7 @@ type AccountSessionItem = {
   createdAt: Date | string;
   isCurrent: boolean;
 };
-type DashboardViewRoute = "employee" | "organization" | "workbox" | "notifications" | "approvals" | "reports" | "risk" | "settings";
+type DashboardViewRoute = "employee" | "groupware" | "organization" | "workbox" | "notifications" | "approvals" | "reports" | "risk" | "settings";
 
 async function postJson(path: string, body?: Record<string, unknown>) {
   const response = await fetch(path, {
@@ -4152,6 +4152,10 @@ export function DashboardMobileNav({
           <Users size={16} />
           <span>조직</span>
         </Link>
+        <Link href={dashboardViewHref("groupware")} aria-current={activeView === "groupware" ? "page" : undefined}>
+          <BriefcaseBusiness size={16} />
+          <span>그룹</span>
+        </Link>
         <Link href={dashboardViewHref("workbox")} aria-current={activeView === "workbox" ? "page" : undefined}>
           <BriefcaseBusiness size={16} />
           <span>업무</span>
@@ -4183,6 +4187,10 @@ export function DashboardMobileNav({
       <Link href={dashboardViewHref("organization")} aria-current={activeView === "organization" ? "page" : undefined}>
         <Users size={16} />
         <span>조직</span>
+      </Link>
+      <Link href={dashboardViewHref("groupware")} aria-current={activeView === "groupware" ? "page" : undefined}>
+        <BriefcaseBusiness size={16} />
+        <span>그룹</span>
       </Link>
       <Link href={dashboardViewHref("workbox")} aria-current={activeView === "workbox" ? "page" : undefined}>
         <BriefcaseBusiness size={16} />

@@ -151,6 +151,19 @@ async function getTargetUserIds(thread: {
     return unique([risk?.userId, risk?.assignedToId]);
   }
 
+  if (thread.targetType === WorkThreadTargetType.USER_PROFILE) {
+    const user = await prisma.user.findFirst({
+      where: {
+        id: thread.targetId,
+        companyId: thread.companyId
+      },
+      select: {
+        id: true
+      }
+    });
+    return unique([user?.id]);
+  }
+
   const managers = await prisma.user.findMany({
     where: {
       companyId: thread.companyId,
@@ -366,6 +379,80 @@ export async function ensureWorkThreadForMonthClose(input: {
   });
 }
 
+export async function ensureWorkThreadForUserProfile(input: {
+  companyId: string;
+  targetUserId: string;
+  actorUserId?: string | null;
+  assigneeId?: string | null;
+}) {
+  const targetUser = await prisma.user.findFirst({
+    where: {
+      id: input.targetUserId,
+      companyId: input.companyId,
+      isActive: true
+    },
+    include: {
+      team: true
+    }
+  });
+
+  if (!targetUser) {
+    throw new Error("직원을 찾을 수 없습니다.");
+  }
+
+  const assigneeId = input.assigneeId?.trim() || null;
+  if (assigneeId) {
+    const assignee = await prisma.user.findFirst({
+      where: {
+        id: assigneeId,
+        companyId: input.companyId,
+        isActive: true,
+        role: {
+          in: ["ADMIN", "HR", "MANAGER"]
+        }
+      }
+    });
+    if (!assignee) {
+      throw new Error("담당자는 관리자, HR, 팀장 중에서 선택하세요.");
+    }
+  }
+
+  const title = `${targetUser.name}님 프로필 메모`;
+  const existing = await prisma.workThread.findUnique({
+    where: {
+      companyId_targetType_targetId: {
+        companyId: input.companyId,
+        targetType: WorkThreadTargetType.USER_PROFILE,
+        targetId: targetUser.id
+      }
+    }
+  });
+
+  if (existing) {
+    return prisma.workThread.update({
+      where: {
+        id: existing.id
+      },
+      data: {
+        title,
+        assigneeId: assigneeId ?? existing.assigneeId
+      }
+    });
+  }
+
+  return prisma.workThread.create({
+    data: {
+      companyId: input.companyId,
+      targetType: WorkThreadTargetType.USER_PROFILE,
+      targetId: targetUser.id,
+      title,
+      priority: WorkThreadPriority.NORMAL,
+      assigneeId,
+      createdById: input.actorUserId ?? null
+    }
+  });
+}
+
 export async function closeWorkThreadForTarget(input: {
   companyId: string;
   targetType: WorkThreadTargetType;
@@ -492,6 +579,22 @@ async function targetSummary(thread: {
       return "리스크 신호를 찾을 수 없음";
     }
     return `${risk.user.name} · ${risk.level} · ${risk.message}`;
+  }
+
+  if (thread.targetType === WorkThreadTargetType.USER_PROFILE) {
+    const user = await prisma.user.findFirst({
+      where: {
+        id: thread.targetId,
+        companyId: thread.companyId
+      },
+      include: {
+        team: true
+      }
+    });
+    if (!user) {
+      return "직원 프로필을 찾을 수 없음";
+    }
+    return `${user.name} · ${user.team?.name ?? "소속 없음"} · ${user.jobTitle ?? user.role}`;
   }
 
   const monthClose = await prisma.monthClose.findUnique({
