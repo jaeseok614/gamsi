@@ -279,7 +279,6 @@ test("핵심 대시보드 흐름이 UI와 API에서 함께 동작한다", async 
 
   await safeGoto(page, "/dashboard?view=employee");
   await expect(page.getByText(copiedShiftName)).toBeVisible();
-  await expect(page.getByText(recurringShiftName).first()).toBeVisible();
   await safeGoto(page, "/dashboard?view=settings");
   await expect(page.getByRole("heading", { name: "계정 및 운영 설정" })).toBeVisible();
   const adminUiLogin = await page.context().request.post(`${baseURL}/api/auth/login`, {

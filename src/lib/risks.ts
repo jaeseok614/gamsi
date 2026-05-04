@@ -1033,6 +1033,13 @@ export async function updateRiskWorkflow(actor: Actor, input: {
     throw new Error("리스크를 찾을 수 없습니다.");
   }
 
+  if (actor.role === "MANAGER") {
+    const managedUsers = await getManagedUsers(actor);
+    if (!managedUsers.some((user) => user.id === risk.userId)) {
+      throw new Error("관리할 수 있는 팀의 리스크만 처리할 수 있습니다.");
+    }
+  }
+
   let assignedToId: string | null | undefined = undefined;
   if (input.assignedToId !== undefined) {
     assignedToId = input.assignedToId?.trim() || null;

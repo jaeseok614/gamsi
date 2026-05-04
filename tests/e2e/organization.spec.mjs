@@ -78,7 +78,7 @@ test("조직도, 직원 프로필, 근무 상태판이 연결된다", async ({ p
   });
   expect(uiLogin.ok()).toBeTruthy();
   await safeGoto(page, `/dashboard?view=organization&orgUserId=${employee.id}&orgSearch=${encodeURIComponent(jobTitle)}`);
-  await expect(page.getByRole("heading", { name: "조직도" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "조직도" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "근무 상태판" })).toBeVisible();
   await expect(page.getByText(jobTitle).first()).toBeVisible();
   await expect(page.getByText("010-1999-0001")).toBeVisible();

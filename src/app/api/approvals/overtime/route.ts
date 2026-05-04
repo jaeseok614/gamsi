@@ -8,7 +8,7 @@ import { getAttendanceSnapshot } from "@/lib/attendance";
 import { assertDateMonthOpen } from "@/lib/month-close";
 import { notifyApprovalPending } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { saveApprovalAttachments } from "@/lib/uploads";
+import { saveApprovalAttachments, validateApprovalAttachmentFiles } from "@/lib/uploads";
 import { ensureWorkThreadForApproval } from "@/lib/workbox";
 
 async function parsePayload(request: NextRequest) {
@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
   );
   if (requestedMinutes <= 0) {
     return jsonError("요청할 초과근로 시간이 없습니다.");
+  }
+
+  try {
+    validateApprovalAttachmentFiles(payload.attachments);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "첨부 파일을 확인하세요.");
   }
 
   const requestRecord = await prisma.approvalRequest.create({

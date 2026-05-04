@@ -54,7 +54,7 @@ function queueDedupeKey(path: FieldQueueItem["path"], body: Record<string, unkno
 }
 
 function isConflictMessage(message: string) {
-  return /이미\s*(출근|퇴근)|진행 중인 근무가 없습니다|현재 열린 근무 세션이 없습니다|상태를 변경할 수 없습니다|이미 종료/.test(message);
+  return /이미\s*(오늘\s*)?(출근|퇴근)|진행 중인 근무가 없습니다|현재 열린 근무 세션이 없습니다|상태를 변경할 수 없습니다|이미 종료/.test(message);
 }
 
 function dispatchQueueSync() {

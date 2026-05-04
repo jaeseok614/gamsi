@@ -10,7 +10,7 @@ import { notifyApprovalPending } from "@/lib/notifications";
 import { buildHolidayDateSet, getCompanyHolidays, getCurrentWorkPolicy } from "@/lib/policy-engine";
 import { prisma } from "@/lib/prisma";
 import { dateOnly } from "@/lib/time";
-import { saveApprovalAttachments } from "@/lib/uploads";
+import { saveApprovalAttachments, validateApprovalAttachmentFiles } from "@/lib/uploads";
 import { ensureWorkThreadForApproval } from "@/lib/workbox";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -77,6 +77,12 @@ export async function POST(request: NextRequest) {
 
   if (!reason) {
     return jsonError("휴가 사유를 입력하세요.");
+  }
+
+  try {
+    validateApprovalAttachmentFiles(payload.attachments);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "첨부 파일을 확인하세요.");
   }
 
   if (endDate < startDate) {
