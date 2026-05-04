@@ -56,6 +56,9 @@ enum NotificationType {
   WORKBOX_COMMENT
   WORKBOX_MENTION
   WORKBOX_ASSIGNED
+  ANNOUNCEMENT
+  PAYROLL_STATEMENT
+  DOCUMENT_REQUEST
 }
 
 enum SessionStatus {
@@ -170,6 +173,7 @@ enum WorkThreadTargetType {
   RISK_SIGNAL
   MONTH_CLOSE
   USER_PROFILE
+  DOCUMENT_REQUEST
 }
 
 enum WorkThreadStatus {
@@ -182,6 +186,27 @@ enum WorkThreadPriority {
   NORMAL
   HIGH
   URGENT
+}
+
+enum AnnouncementAudience {
+  ALL
+  TEAM
+}
+
+enum PerformanceOwnerType {
+  USER
+  TEAM
+}
+
+enum PayrollStatementStatus {
+  PUBLISHED
+  LOCKED
+}
+
+enum DocumentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model Company {
@@ -216,6 +241,11 @@ model Company {
   workThreads           WorkThread[]
   workComments          WorkComment[]
   workThreadReadStates  WorkThreadReadState[]
+  announcements         Announcement[]
+  announcementReads     AnnouncementRead[]
+  performanceGoals      PerformanceGoal[]
+  payrollStatementIssues PayrollStatementIssue[]
+  documentRequests      DocumentRequest[]
 }
 
 model Team {
@@ -230,6 +260,8 @@ model Team {
   manager       User?    @relation("TeamManager", fields: [managerUserId], references: [id])
   users         User[]   @relation("TeamUsers")
   invitations   Invitation[]
+  announcements Announcement[]
+  performanceGoals PerformanceGoal[]
 
   @@index([companyId])
 }
@@ -279,6 +311,16 @@ model User {
   createdWorkThreads    WorkThread[]        @relation("WorkThreadCreatedBy")
   workComments          WorkComment[]       @relation("WorkCommentAuthor")
   workThreadReadStates  WorkThreadReadState[]
+  authoredAnnouncements Announcement[]      @relation("AnnouncementAuthor")
+  announcementReads     AnnouncementRead[]
+  performanceGoals      PerformanceGoal[]   @relation("PerformanceGoalUser")
+  createdPerformanceGoals PerformanceGoal[] @relation("PerformanceGoalCreatedBy")
+  reviewedPerformanceGoals PerformanceGoal[] @relation("PerformanceGoalReviewedBy")
+  payrollStatementIssues PayrollStatementIssue[] @relation("PayrollStatementUser")
+  issuedPayrollStatements PayrollStatementIssue[] @relation("PayrollStatementIssuedBy")
+  lockedPayrollStatements PayrollStatementIssue[] @relation("PayrollStatementLockedBy")
+  requestedDocuments    DocumentRequest[]   @relation("DocumentRequester")
+  reviewedDocuments     DocumentRequest[]   @relation("DocumentReviewer")
 
   @@index([companyId])
   @@index([teamId])
@@ -749,6 +791,117 @@ model WorkThreadReadState {
 
   @@unique([threadId, userId])
   @@index([companyId, userId, lastReadAt])
+}
+
+model Announcement {
+  id          String               @id @default(cuid())
+  companyId   String
+  authorId    String
+  teamId      String?
+  audience    AnnouncementAudience @default(ALL)
+  title       String
+  body        String               @db.Text
+  isPinned    Boolean              @default(false)
+  emailStatus String               @default("not_sent")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author      User                 @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  team        Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  reads       AnnouncementRead[]
+
+  @@index([companyId, createdAt])
+  @@index([teamId, createdAt])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  companyId      String
+  announcementId String
+  userId         String
+  readAt         DateTime     @default(now())
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([companyId, userId, readAt])
+}
+
+model PerformanceGoal {
+  id           String               @id @default(cuid())
+  companyId    String
+  ownerType    PerformanceOwnerType
+  userId       String?
+  teamId       String?
+  month        String
+  title        String
+  unit         String               @default("건")
+  targetValue  Float
+  actualValue  Float                @default(0)
+  note         String?
+  evaluationMemo String?
+  createdById  String
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user         User?                @relation("PerformanceGoalUser", fields: [userId], references: [id], onDelete: Cascade)
+  team         Team?                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy    User                 @relation("PerformanceGoalCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  reviewedBy   User?                @relation("PerformanceGoalReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, month])
+  @@index([userId, month])
+  @@index([teamId, month])
+}
+
+model PayrollStatementIssue {
+  id          String                 @id @default(cuid())
+  companyId   String
+  userId      String
+  month       String
+  status      PayrollStatementStatus @default(PUBLISHED)
+  snapshot    Json?
+  note        String?
+  issuedById  String?
+  issuedAt    DateTime               @default(now())
+  lockedById  String?
+  lockedAt    DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User                   @relation("PayrollStatementUser", fields: [userId], references: [id], onDelete: Cascade)
+  issuedBy    User?                  @relation("PayrollStatementIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  lockedBy    User?                  @relation("PayrollStatementLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, userId, month])
+  @@index([companyId, month])
+  @@index([userId, month])
+}
+
+model DocumentRequest {
+  id          String                @id @default(cuid())
+  companyId   String
+  requesterId String
+  reviewerId  String?
+  category    String                @default("GENERAL")
+  title       String
+  body        String                @db.Text
+  amount      Float?
+  status      DocumentRequestStatus @default(PENDING)
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  company     Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requester   User                  @relation("DocumentRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer    User?                 @relation("DocumentReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
+  @@index([requesterId, createdAt])
+  @@index([reviewerId, status])
 }
 
 model Invitation {

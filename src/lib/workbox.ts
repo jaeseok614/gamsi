@@ -164,6 +164,20 @@ async function getTargetUserIds(thread: {
     return unique([user?.id]);
   }
 
+  if (thread.targetType === WorkThreadTargetType.DOCUMENT_REQUEST) {
+    const document = await prisma.documentRequest.findFirst({
+      where: {
+        id: thread.targetId,
+        companyId: thread.companyId
+      },
+      select: {
+        requesterId: true,
+        reviewerId: true
+      }
+    });
+    return unique([document?.requesterId, document?.reviewerId]);
+  }
+
   const managers = await prisma.user.findMany({
     where: {
       companyId: thread.companyId,
@@ -453,6 +467,58 @@ export async function ensureWorkThreadForUserProfile(input: {
   });
 }
 
+export async function ensureWorkThreadForDocumentRequest(documentRequestId: string) {
+  const document = await prisma.documentRequest.findUnique({
+    where: {
+      id: documentRequestId
+    },
+    include: {
+      requester: true,
+      reviewer: true
+    }
+  });
+
+  if (!document) {
+    return null;
+  }
+
+  const title = `${document.requester.name}님의 ${document.category} 결재`;
+  const existing = await prisma.workThread.findUnique({
+    where: {
+      companyId_targetType_targetId: {
+        companyId: document.companyId,
+        targetType: WorkThreadTargetType.DOCUMENT_REQUEST,
+        targetId: document.id
+      }
+    }
+  });
+
+  if (existing) {
+    return prisma.workThread.update({
+      where: {
+        id: existing.id
+      },
+      data: {
+        title,
+        status: document.status === "PENDING" ? existing.status : WorkThreadStatus.RESOLVED,
+        assigneeId: document.reviewerId ?? existing.assigneeId
+      }
+    });
+  }
+
+  return prisma.workThread.create({
+    data: {
+      companyId: document.companyId,
+      targetType: WorkThreadTargetType.DOCUMENT_REQUEST,
+      targetId: document.id,
+      title,
+      priority: document.category === "EXPENSE" || document.category === "PURCHASE" ? WorkThreadPriority.HIGH : WorkThreadPriority.NORMAL,
+      assigneeId: document.reviewerId,
+      createdById: document.requesterId
+    }
+  });
+}
+
 export async function closeWorkThreadForTarget(input: {
   companyId: string;
   targetType: WorkThreadTargetType;
@@ -595,6 +661,23 @@ async function targetSummary(thread: {
       return "직원 프로필을 찾을 수 없음";
     }
     return `${user.name} · ${user.team?.name ?? "소속 없음"} · ${user.jobTitle ?? user.role}`;
+  }
+
+  if (thread.targetType === WorkThreadTargetType.DOCUMENT_REQUEST) {
+    const document = await prisma.documentRequest.findFirst({
+      where: {
+        id: thread.targetId,
+        companyId: thread.companyId
+      },
+      include: {
+        requester: true,
+        reviewer: true
+      }
+    });
+    if (!document) {
+      return "전자결재 문서를 찾을 수 없음";
+    }
+    return `${document.requester.name} · ${document.category} · ${document.status}`;
   }
 
   const monthClose = await prisma.monthClose.findUnique({

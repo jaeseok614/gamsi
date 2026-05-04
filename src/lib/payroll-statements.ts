@@ -32,12 +32,28 @@ function csvLine(values: string[]) {
 export async function getPayrollStatement(actor: Actor, input: {
   month: string;
   userId?: string | null;
+  bypassIssueCheck?: boolean;
 }) {
   if (!MONTH_PATTERN.test(input.month)) {
     throw new Error("급여명세 월을 확인하세요.");
   }
 
   const targetUserId = canViewReports(actor.role) && input.userId ? input.userId : actor.id;
+  if (!input.bypassIssueCheck && !canViewReports(actor.role)) {
+    const issue = await prisma.payrollStatementIssue.findUnique({
+      where: {
+        companyId_userId_month: {
+          companyId: actor.companyId,
+          userId: targetUserId,
+          month: input.month
+        }
+      }
+    });
+    if (!issue || (issue.status !== "PUBLISHED" && issue.status !== "LOCKED")) {
+      throw new Error("아직 발행된 급여명세가 없습니다.");
+    }
+  }
+
   const report = await getPayrollReport({
     id: actor.id,
     companyId: actor.companyId,

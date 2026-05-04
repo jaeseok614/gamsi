@@ -1,7 +1,16 @@
-import { BriefcaseBusiness, Mail, MessageSquareText, Phone, Search, Users } from "lucide-react";
+import { Bell, BriefcaseBusiness, FileText, Mail, MessageSquareText, Phone, Search, Target, Users } from "lucide-react";
 import Link from "next/link";
 
-import { ProfileMemoForm } from "@/components/groupware-actions";
+import {
+  AnnouncementForm,
+  AnnouncementReadButton,
+  DocumentRequestForm,
+  DocumentReviewButtons,
+  PayrollIssueForm,
+  PerformanceGoalForm,
+  PerformanceGoalUpdateForm,
+  ProfileMemoForm
+} from "@/components/groupware-actions";
 import { roleLabel } from "@/lib/display-labels";
 import type { getGroupwareDashboard } from "@/lib/groupware";
 import type { getOrganizationDashboard } from "@/lib/organization";
@@ -52,6 +61,23 @@ function contactActionPhone(phone?: string | null) {
   return `tel:${phone.replace(/[^0-9+]/g, "")}`;
 }
 
+function performanceProgress(actualValue: number, targetValue: number) {
+  if (targetValue <= 0) {
+    return 0;
+  }
+  return Math.min(999, Math.round((actualValue / targetValue) * 100));
+}
+
+function documentStatusLabel(status: string) {
+  if (status === "APPROVED") {
+    return "승인";
+  }
+  if (status === "REJECTED") {
+    return "반려";
+  }
+  return "대기";
+}
+
 export function GroupwarePanel({
   organization,
   groupware,
@@ -70,6 +96,13 @@ export function GroupwarePanel({
   const openProfileMemos = groupware.profileMemoThreads.filter((thread) => thread.status === "OPEN");
   const payrollTargetUserId = groupware.canViewPayrollForOthers ? selected?.id : viewerId;
   const visibleContacts = organization.users.slice(0, 18);
+  const contactOptions = organization.users.map((member) => ({
+    id: member.id,
+    name: member.name,
+    email: member.email,
+    role: member.role
+  }));
+  const pendingDocuments = groupware.documentRequests.filter((document) => document.status === "PENDING");
 
   return (
     <div className="stack" style={{ gap: 18 }}>
@@ -87,8 +120,8 @@ export function GroupwarePanel({
           <strong>{openProfileMemos.length}건</strong>
         </div>
         <div className="metric">
-          <span>급여명세</span>
-          <strong>{groupware.payrollMonths.length}개월</strong>
+          <span>공지 미읽음</span>
+          <strong>{groupware.unreadAnnouncementCount}건</strong>
         </div>
       </div>
 
@@ -128,70 +161,110 @@ export function GroupwarePanel({
       </form>
 
       <div className="groupware-layout">
-        <section className="panel stack">
-          <div className="actions-row" style={{ justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0 }}>
-              <Users size={20} /> 사내 직원 연락처
-            </h2>
-            <span className="status-pill gray">{visibleContacts.length}명</span>
-          </div>
-          {visibleContacts.length > 0 ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>직원</th>
-                    <th>부서</th>
-                    <th>상태</th>
-                    <th>연락</th>
-                    <th>메모</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleContacts.map((member) => {
-                    const memoStat = groupware.memoStatsByUser.find((item) => item.userId === member.id);
-                    const phoneHref = contactActionPhone(member.phoneNumber);
-                    return (
-                      <tr key={member.id}>
-                        <td>
-                          <Link href={groupwareHref({ userId: member.id, teamId: organization.filters.teamId, search: organization.filters.search })}>{member.name}</Link>
-                          <br />
-                          <span className="muted">{member.jobTitle || roleLabel(member.role)}</span>
-                        </td>
-                        <td>{member.team?.name ?? "소속 없음"}</td>
-                        <td>
-                          <span className={`status-pill ${member.statusTone}`}>{member.latestStatusLabel}</span>
-                        </td>
-                        <td>
-                          <div className="actions-row">
-                            <a className="button secondary" href={`mailto:${member.email}`}>
-                              <Mail size={14} />
-                              메일
-                            </a>
-                            {phoneHref ? (
-                              <a className="button secondary" href={phoneHref}>
-                                <Phone size={14} />
-                                전화
-                              </a>
-                            ) : null}
-                          </div>
-                          <span className="muted">{member.extensionNumber ? `내선 ${member.extensionNumber}` : member.email}</span>
-                        </td>
-                        <td>
-                          <Link className="button secondary" href={groupwareHref({ userId: member.id })}>
-                            <MessageSquareText size={14} />
-                            {memoStat?.openCount ? `미결 ${memoStat.openCount}` : "메모"}
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        <section className="stack">
+          <div id="groupware-announcements" className="panel stack">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>
+                <Bell size={20} /> 공지/게시판
+              </h2>
+              <span className="status-pill gray">{groupware.announcements.length}건</span>
             </div>
-          ) : (
-            <div className="empty">조건에 맞는 직원 연락처가 없습니다.</div>
-          )}
+            {groupware.canManageGroupware ? (
+              <div className="panel stack" style={{ background: "#fbfdff" }}>
+                <AnnouncementForm teams={organization.selectableTeams} />
+              </div>
+            ) : null}
+            {groupware.announcements.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.announcements.map((announcement) => (
+                  <div className={`notification-card ${announcement.isReadByViewer ? "read" : "unread"}`} key={announcement.id}>
+                    <div>
+                      <div className="actions-row">
+                        <strong>{announcement.title}</strong>
+                        <span className="status-pill gray">{announcement.audience === "TEAM" ? announcement.team?.name ?? "팀" : "전체"}</span>
+                        {announcement.isPinned ? <span className="status-pill yellow">고정</span> : null}
+                      </div>
+                      <p className="muted" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>
+                        {announcement.body}
+                      </p>
+                      <p className="muted" style={{ margin: "6px 0 0" }}>
+                        {announcement.author.name} · 읽음 {announcement._count.reads}명 · {formatKstDateTime(announcement.createdAt)}
+                      </p>
+                    </div>
+                    <AnnouncementReadButton announcementId={announcement.id} isRead={announcement.isReadByViewer} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">등록된 공지가 없습니다.</div>
+            )}
+          </div>
+
+          <div className="panel stack">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>
+                <Users size={20} /> 사내 직원 연락처
+              </h2>
+              <span className="status-pill gray">{visibleContacts.length}명</span>
+            </div>
+            {visibleContacts.length > 0 ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>직원</th>
+                      <th>부서</th>
+                      <th>상태</th>
+                      <th>연락</th>
+                      <th>메모</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleContacts.map((member) => {
+                      const memoStat = groupware.memoStatsByUser.find((item) => item.userId === member.id);
+                      const phoneHref = contactActionPhone(member.phoneNumber);
+                      return (
+                        <tr key={member.id}>
+                          <td>
+                            <Link href={groupwareHref({ userId: member.id, teamId: organization.filters.teamId, search: organization.filters.search })}>{member.name}</Link>
+                            <br />
+                            <span className="muted">{member.jobTitle || roleLabel(member.role)}</span>
+                          </td>
+                          <td>{member.team?.name ?? "소속 없음"}</td>
+                          <td>
+                            <span className={`status-pill ${member.statusTone}`}>{member.latestStatusLabel}</span>
+                          </td>
+                          <td>
+                            <div className="actions-row">
+                              <a className="button secondary" href={`mailto:${member.email}`}>
+                                <Mail size={14} />
+                                메일
+                              </a>
+                              {phoneHref ? (
+                                <a className="button secondary" href={phoneHref}>
+                                  <Phone size={14} />
+                                  전화
+                                </a>
+                              ) : null}
+                            </div>
+                            <span className="muted">{member.extensionNumber ? `내선 ${member.extensionNumber}` : member.email}</span>
+                          </td>
+                          <td>
+                            <Link className="button secondary" href={groupwareHref({ userId: member.id })}>
+                              <MessageSquareText size={14} />
+                              {memoStat?.openCount ? `미결 ${memoStat.openCount}` : "메모"}
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="empty">조건에 맞는 직원 연락처가 없습니다.</div>
+            )}
+          </div>
         </section>
 
         <aside className="stack">
@@ -250,29 +323,127 @@ export function GroupwarePanel({
             )}
           </section>
 
+          <section id="groupware-performance" className="panel stack">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>
+                <Target size={20} /> 실적관리
+              </h2>
+              <span className="status-pill gray">{groupware.performanceGoals.length}건</span>
+            </div>
+            {groupware.canManageGroupware ? (
+              <div className="panel stack" style={{ background: "#fbfdff" }}>
+                <PerformanceGoalForm currentMonth={groupware.currentMonth} users={contactOptions} teams={organization.selectableTeams} />
+              </div>
+            ) : null}
+            {groupware.performanceGoals.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.performanceGoals.map((goal) => (
+                  <div className="notification-card read" key={goal.id}>
+                    <div>
+                      <strong>{goal.title}</strong>
+                      <p className="muted" style={{ margin: "6px 0 0" }}>
+                        {(goal.user?.name ?? goal.team?.name) || "대상 없음"} · {goal.actualValue}/{goal.targetValue} {goal.unit} · {performanceProgress(goal.actualValue, goal.targetValue)}%
+                      </p>
+                      {goal.evaluationMemo ? (
+                        <p className="muted" style={{ margin: "6px 0 0" }}>{goal.evaluationMemo}</p>
+                      ) : null}
+                    </div>
+                    <PerformanceGoalUpdateForm goalId={goal.id} currentActual={goal.actualValue} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">이번 달 실적 목표가 없습니다.</div>
+            )}
+          </section>
+
           <section id="groupware-payroll-statements" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>급여명세 다운로드</h2>
               <span className="status-pill gray">{payrollTargetUserId === viewerId ? "본인" : selected?.name}</span>
             </div>
-            <div className="stack" style={{ gap: 8 }}>
-              {groupware.payrollMonths.map((month) => (
-                <div className="notification-card read" key={month}>
-                  <div>
-                    <strong>{month}</strong>
-                    <p className="muted" style={{ margin: "6px 0 0" }}>PDF · CSV</p>
+            {groupware.canViewPayrollForOthers ? (
+              <div className="panel stack" style={{ background: "#fbfdff" }}>
+                <PayrollIssueForm currentMonth={groupware.currentMonth} users={contactOptions} />
+              </div>
+            ) : null}
+            {groupware.payrollIssues.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.payrollIssues.slice(0, 6).map((issue) => (
+                  <div className="notification-card read" key={issue.id}>
+                    <div>
+                      <strong>{issue.month} · {issue.user.name}</strong>
+                      <p className="muted" style={{ margin: "6px 0 0" }}>
+                        {issue.status === "LOCKED" ? "잠금" : "발행"} · {issue.issuedBy?.name ?? "-"} · {formatKstDateTime(issue.issuedAt)}
+                      </p>
+                    </div>
+                    <div className="actions-row">
+                      <a className="button secondary" href={payrollStatementHref(issue.month, "pdf", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
+                        PDF
+                      </a>
+                      <a className="button secondary" href={payrollStatementHref(issue.month, "csv", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
+                        CSV
+                      </a>
+                    </div>
                   </div>
-                  <div className="actions-row">
-                    <a className="button secondary" href={payrollStatementHref(month, "pdf", payrollTargetUserId)}>
-                      PDF
-                    </a>
-                    <a className="button secondary" href={payrollStatementHref(month, "csv", payrollTargetUserId)}>
-                      CSV
-                    </a>
+                ))}
+              </div>
+            ) : null}
+            {groupware.canViewPayrollForOthers ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.payrollMonths.map((month) => (
+                  <div className="notification-card read" key={month}>
+                    <div>
+                      <strong>{month} 미리보기</strong>
+                      <p className="muted" style={{ margin: "6px 0 0" }}>HR 검토용 PDF · CSV</p>
+                    </div>
+                    <div className="actions-row">
+                      <a className="button secondary" href={payrollStatementHref(month, "pdf", payrollTargetUserId)}>
+                        PDF
+                      </a>
+                      <a className="button secondary" href={payrollStatementHref(month, "csv", payrollTargetUserId)}>
+                        CSV
+                      </a>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            ) : groupware.payrollIssues.length === 0 ? (
+              <div className="empty">아직 발행된 급여명세가 없습니다.</div>
+            ) : null}
+          </section>
+
+          <section id="groupware-documents" className="panel stack">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>
+                <FileText size={20} /> 전자결재/문서함
+              </h2>
+              <span className="status-pill gray">대기 {pendingDocuments.length}건</span>
             </div>
+            <DocumentRequestForm reviewers={assignableUsers} />
+            {groupware.documentRequests.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.documentRequests.map((document) => (
+                  <div className="notification-card read" key={document.id}>
+                    <div>
+                      <div className="actions-row">
+                        <strong>{document.title}</strong>
+                        <span className={`status-pill ${document.status === "PENDING" ? "yellow" : document.status === "APPROVED" ? "green" : "red"}`}>
+                          {documentStatusLabel(document.status)}
+                        </span>
+                      </div>
+                      <p className="muted" style={{ margin: "6px 0 0" }}>
+                        {document.category} · 요청 {document.requester.name} · 결재 {document.reviewer?.name ?? "미지정"}
+                      </p>
+                      <p className="muted" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{document.body}</p>
+                    </div>
+                    {groupware.canManageGroupware && document.status === "PENDING" ? <DocumentReviewButtons documentId={document.id} /> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">전자결재 문서가 없습니다.</div>
+            )}
           </section>
 
           <section className="panel stack">

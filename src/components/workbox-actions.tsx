@@ -111,6 +111,9 @@ function targetTypeLabel(type: string) {
   if (type === "USER_PROFILE") {
     return "메모";
   }
+  if (type === "DOCUMENT_REQUEST") {
+    return "전자결재";
+  }
   return "월마감";
 }
 

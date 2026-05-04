@@ -315,7 +315,7 @@ function buildMissingAdjustmentActionUrl(input: {
 }
 
 function dashboardViewUrl(
-  view: "employee" | "notifications" | "approvals" | "reports" | "risk",
+  view: "employee" | "groupware" | "notifications" | "approvals" | "reports" | "risk" | "workbox",
   params?: Record<string, string | null | undefined>,
   hash?: string
 ) {
