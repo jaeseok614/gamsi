@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gamsi
+      POSTGRES_USER: gamsi
+      POSTGRES_PASSWORD: gamsi
+    ports:
+      - "54329:5432"
+    volumes:
+      - gamsi_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamsi -d gamsi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+    profiles:
+      - app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://gamsi:gamsi@db:5432/gamsi?schema=public
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:-local-docker-secret-change-before-production-32chars}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-워크가드 <no-reply@workguard.local>}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:ops@workguard.local}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  gamsi_postgres:

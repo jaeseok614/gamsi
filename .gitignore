@@ -1,0 +1,23 @@
+node_modules
+.next
+.codex
+dist
+coverage
+playwright-report
+test-results
+*.log
+*.tsbuildinfo
+
+# Local and production secrets. Keep example files committed.
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Runtime data and operational artifacts.
+backups
+data/uploads
+
+# Prisma client is generated during install/build.
+src/generated

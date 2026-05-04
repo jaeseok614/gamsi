@@ -1,0 +1,792 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  HR
+  ADMIN
+}
+
+enum EventType {
+  CHECK_IN
+  CHECK_OUT
+  STATUS_CHANGE
+}
+
+enum WorkStatus {
+  WORKING
+  MEETING
+  OUTSIDE
+  BUSINESS_TRIP
+  TRAINING
+  BREAK
+  OTHER
+  OFFLINE
+}
+
+enum ApprovalType {
+  OVERTIME
+  ADJUSTMENT
+  LEAVE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  APPROVAL_PENDING
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  SCHEDULE_UPDATED
+  MISSING_RECORD
+  LEAVE_STARTING
+  MONTH_CLOSE
+  DAILY_DIGEST
+  WORKBOX_COMMENT
+  WORKBOX_MENTION
+  WORKBOX_ASSIGNED
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+  NEEDS_REVIEW
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskType {
+  WEEKLY_LIMIT
+  UNAPPROVED_OVERTIME
+  REPEATED_OVERTIME
+  MISSING_EVIDENCE
+  ADJUSTMENT_SPIKE
+  LATE_RISK
+  MISSING_CHECK_IN_OUT
+  BREAK_VIOLATION
+  SCHEDULE_MISMATCH
+  NIGHT_HOLIDAY_WORK
+  INCLUSIVE_WAGE_RISK
+}
+
+enum RiskWorkflowStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
+enum RiskResolutionType {
+  NONE
+  AUTO
+  MANUAL
+  APPROVAL
+  ADJUSTMENT
+  SCHEDULE
+  MONTH_CLOSE
+  OTHER
+}
+
+enum AdjustmentType {
+  GENERAL
+  MISSING_CHECK_IN
+  MISSING_CHECK_OUT
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  OFFICIAL
+  UNPAID
+}
+
+enum LeaveDuration {
+  FULL_DAY
+  HALF_DAY_AM
+  HALF_DAY_PM
+  HOURLY
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+}
+
+enum CompanyPlanTier {
+  TRIAL
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum MonthCloseStatus {
+  OPEN
+  CLOSED
+}
+
+enum AnnualLeaveBasis {
+  CALENDAR_YEAR
+  JOIN_DATE
+}
+
+enum PayrollSyncStatus {
+  PENDING
+  APPLIED
+}
+
+enum MonthCloseEventType {
+  CLOSED
+  REOPENED
+  PAYROLL_APPLIED
+  PAYROLL_PENDING
+  EXPORT
+}
+
+enum QrTokenPurpose {
+  CHECK_IN
+  CHECK_OUT
+  BOTH
+}
+
+enum WorkThreadTargetType {
+  APPROVAL_REQUEST
+  RISK_SIGNAL
+  MONTH_CLOSE
+}
+
+enum WorkThreadStatus {
+  OPEN
+  RESOLVED
+}
+
+enum WorkThreadPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Company {
+  id                    String             @id @default(cuid())
+  name                  String
+  timezone              String             @default("Asia/Seoul")
+  weeklyLimitMinutes    Int                @default(3120)
+  defaultBreakMinutes   Int                @default(60)
+  planTier              CompanyPlanTier    @default(TRIAL)
+  userLimit             Int                @default(25)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  teams                 Team[]
+  users                 User[]
+  workLocations         WorkLocation[]
+  qrClockTokens         QrClockToken[]
+  workPolicies          WorkPolicy[]
+  attendanceEvents      AttendanceEvent[]
+  workSessions          WorkSession[]
+  workSchedules         WorkSchedule[]
+  approvalRequests      ApprovalRequest[]
+  requestAttachments    RequestAttachment[]
+  notifications         Notification[]
+  notificationPreferences NotificationPreference[]
+  notificationDispatchLogs NotificationDispatchLog[]
+  monthCloses           MonthClose[]
+  monthCloseEvents      MonthCloseEvent[]
+  holidays              CompanyHoliday[]
+  riskSignals           RiskSignal[]
+  invitations           Invitation[]
+  auditLogs             AuditLog[]
+  workThreads           WorkThread[]
+  workComments          WorkComment[]
+  workThreadReadStates  WorkThreadReadState[]
+}
+
+model Team {
+  id            String   @id @default(cuid())
+  companyId     String
+  name          String
+  managerUserId String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager       User?    @relation("TeamManager", fields: [managerUserId], references: [id])
+  users         User[]   @relation("TeamUsers")
+  invitations   Invitation[]
+
+  @@index([companyId])
+}
+
+model User {
+  id                    String             @id @default(cuid())
+  companyId             String
+  teamId                String?
+  name                  String
+  email                 String             @unique
+  passwordHash          String
+  role                  Role               @default(EMPLOYEE)
+  employmentType        String             @default("full_time")
+  jobTitle              String?
+  phoneNumber           String?
+  extensionNumber       String?
+  isActive              Boolean            @default(true)
+  joinedAt              DateTime           @default(now()) @db.Date
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  company               Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team                  Team?              @relation("TeamUsers", fields: [teamId], references: [id])
+  managedTeams          Team[]             @relation("TeamManager")
+  attendanceEvents      AttendanceEvent[]
+  workSessions          WorkSession[]
+  workSchedules         WorkSchedule[]
+  requestedApprovals    ApprovalRequest[]  @relation("Requester")
+  reviewedApprovals     ApprovalRequest[]  @relation("Reviewer")
+  uploadedAttachments   RequestAttachment[]
+  notifications         Notification[]
+  authSessions          AuthSession[]
+  passwordResetTokens   PasswordResetToken[]
+  webPushSubscriptions  WebPushSubscription[]
+  generatedQrClockTokens QrClockToken[]    @relation("QrClockTokenGeneratedBy")
+  usedQrClockTokens      QrClockToken[]    @relation("QrClockTokenUsedBy")
+  notificationPreference NotificationPreference?
+  notificationDispatchLogs NotificationDispatchLog[]
+  lockedMonthCloses     MonthClose[]       @relation("MonthCloseLockedBy")
+  reopenedMonthCloses   MonthClose[]       @relation("MonthCloseReopenedBy")
+  appliedPayrollMonthCloses MonthClose[]   @relation("MonthClosePayrollAppliedBy")
+  monthCloseEvents      MonthCloseEvent[]
+  sentInvitations       Invitation[]        @relation("InvitedBy")
+  riskSignals           RiskSignal[]
+  assignedRiskSignals   RiskSignal[]        @relation("AssignedRiskSignals")
+  auditLogs             AuditLog[]
+  assignedWorkThreads   WorkThread[]        @relation("WorkThreadAssignee")
+  createdWorkThreads    WorkThread[]        @relation("WorkThreadCreatedBy")
+  workComments          WorkComment[]       @relation("WorkCommentAuthor")
+  workThreadReadStates  WorkThreadReadState[]
+
+  @@index([companyId])
+  @@index([teamId])
+}
+
+model AuthSession {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  ipAddress  String?
+  userAgent  String?
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AuthLoginAttempt {
+  id         String   @id @default(cuid())
+  email      String
+  ipAddress  String?
+  succeeded  Boolean  @default(false)
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([email, succeeded, createdAt])
+  @@index([ipAddress, succeeded, createdAt])
+  @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id            String   @id @default(cuid())
+  userId        String
+  tokenHash     String   @unique
+  requestedByIp String?
+  userAgent     String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
+}
+
+model WebPushSubscription {
+  id             String   @id @default(cuid())
+  userId         String
+  endpoint       String   @unique
+  p256dh         String
+  authSecret     String
+  expirationTime DateTime?
+  userAgent      String?
+  lastSuccessAt  DateTime?
+  lastFailureAt  DateTime?
+  failureCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([userId, failureCount])
+}
+
+model WorkPolicy {
+  id                      String   @id @default(cuid())
+  companyId               String
+  name                    String
+  version                 Int      @default(1)
+  isActive                Boolean  @default(true)
+  effectiveFrom           DateTime @default(now())
+  standardDailyMinutes    Int      @default(480)
+  weeklyLimitMinutes      Int      @default(3120)
+  defaultBreakMinutes     Int      @default(60)
+  overtimeThresholdMinutes Int     @default(480)
+  annualLeaveBasis        AnnualLeaveBasis @default(CALENDAR_YEAR)
+  annualLeaveGrantDays    Float    @default(15)
+  firstYearMonthlyAccrualEnabled Boolean @default(true)
+  annualLeaveCarryoverDays Float   @default(0)
+  carryoverExpiryMonth    Int      @default(12)
+  carryoverExpiryDay      Int      @default(31)
+  allowHalfDayLeave       Boolean  @default(true)
+  allowHourlyLeave        Boolean  @default(true)
+  hourlyLeaveUnitMinutes  Int      @default(60)
+  overtimePremiumRate     Float    @default(1.5)
+  nightPremiumRate        Float    @default(0.5)
+  holidayPremiumRate      Float    @default(1.5)
+  holidayIncludesWeekends Boolean  @default(true)
+  nightWorkStart          String   @default("22:00")
+  nightWorkEnd            String   @default("06:00")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model WorkLocation {
+  id          String         @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  qrTokens    QrClockToken[]
+
+  @@index([companyId, isActive])
+}
+
+model QrClockToken {
+  id            String         @id @default(cuid())
+  companyId     String
+  locationId    String
+  tokenHash     String         @unique
+  purpose       QrTokenPurpose @default(BOTH)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  usedById      String?
+  generatedById String?
+  createdAt     DateTime       @default(now())
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  location      WorkLocation   @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  usedBy        User?          @relation("QrClockTokenUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+  generatedBy   User?          @relation("QrClockTokenGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, expiresAt])
+  @@index([locationId, createdAt])
+  @@index([usedById])
+}
+
+model AttendanceEvent {
+  id          String      @id @default(cuid())
+  companyId   String
+  userId      String
+  eventType   EventType
+  status      WorkStatus?
+  occurredAt  DateTime
+  source      String      @default("web")
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, occurredAt])
+  @@index([userId, occurredAt])
+}
+
+model WorkSession {
+  id                      String          @id @default(cuid())
+  companyId               String
+  userId                  String
+  workDate                DateTime        @db.Date
+  checkInAt               DateTime?
+  checkOutAt              DateTime?
+  grossMinutes            Int             @default(0)
+  breakMinutes            Int             @default(0)
+  approvedOvertimeMinutes Int             @default(0)
+  calculatedWorkMinutes   Int             @default(0)
+  overtimeMinutes         Int             @default(0)
+  status                  SessionStatus   @default(OPEN)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  company                 Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvalRequests        ApprovalRequest[]
+  riskSignals             RiskSignal[]
+
+  @@unique([userId, workDate])
+  @@index([companyId, workDate])
+}
+
+model WorkSchedule {
+  id                String   @id @default(cuid())
+  companyId         String
+  userId            String
+  workDate          DateTime @db.Date
+  shiftName         String   @default("기본 근무")
+  scheduledStartAt  DateTime
+  scheduledEndAt    DateTime
+  breakMinutes      Int      @default(60)
+  note              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workDate])
+  @@index([companyId, workDate])
+  @@index([userId, workDate])
+}
+
+model ApprovalRequest {
+  id                String          @id @default(cuid())
+  companyId         String
+  requesterId       String
+  reviewerId        String?
+  sessionId         String?
+  type              ApprovalType
+  adjustmentType    AdjustmentType?
+  targetDate        DateTime?       @db.Date
+  requestedAt       DateTime?
+  requestedMinutes  Int?
+  requestedLeaveMinutes Int?
+  leaveType         LeaveType?
+  leaveStartDate    DateTime?       @db.Date
+  leaveEndDate      DateTime?       @db.Date
+  leaveDuration     LeaveDuration?
+  reason            String
+  status            ApprovalStatus  @default(PENDING)
+  reviewNote        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requester         User            @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer          User?           @relation("Reviewer", fields: [reviewerId], references: [id])
+  session           WorkSession?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  attachments       RequestAttachment[]
+
+  @@index([companyId, status])
+  @@index([requesterId, createdAt])
+}
+
+model RequestAttachment {
+  id                String          @id @default(cuid())
+  companyId         String
+  approvalRequestId String
+  uploadedById      String
+  originalName      String
+  mimeType          String
+  sizeBytes         Int
+  storagePath       String
+  createdAt         DateTime        @default(now())
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  uploadedBy        User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([approvalRequestId])
+  @@index([uploadedById])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  companyId   String
+  userId      String
+  type        NotificationType
+  title       String
+  message     String
+  actionUrl   String?
+  metadata    Json?
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([userId, isRead, createdAt])
+  @@index([userId, archivedAt, createdAt])
+}
+
+model MonthClose {
+  id            String           @id @default(cuid())
+  companyId     String
+  month         String
+  status        MonthCloseStatus @default(OPEN)
+  summary       Json?
+  lockedAt      DateTime?
+  lockedById    String?
+  reopenedAt    DateTime?
+  reopenedById  String?
+  reopenReason  String?
+  payrollSyncStatus PayrollSyncStatus @default(PENDING)
+  payrollAppliedAt DateTime?
+  payrollAppliedById String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lockedBy      User?            @relation("MonthCloseLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+  reopenedBy    User?            @relation("MonthCloseReopenedBy", fields: [reopenedById], references: [id], onDelete: SetNull)
+  payrollAppliedBy User?         @relation("MonthClosePayrollAppliedBy", fields: [payrollAppliedById], references: [id], onDelete: SetNull)
+  events        MonthCloseEvent[]
+
+  @@unique([companyId, month])
+  @@index([companyId, status])
+}
+
+model MonthCloseEvent {
+  id            String              @id @default(cuid())
+  monthCloseId  String
+  companyId     String
+  actorUserId   String?
+  type          MonthCloseEventType
+  detail        Json?
+  createdAt     DateTime            @default(now())
+  monthClose    MonthClose          @relation(fields: [monthCloseId], references: [id], onDelete: Cascade)
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor         User?               @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([monthCloseId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+model CompanyHoliday {
+  id            String   @id @default(cuid())
+  companyId     String
+  date          DateTime @db.Date
+  name          String
+  isPaidHoliday Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
+}
+
+model NotificationPreference {
+  id                    String   @id @default(cuid())
+  companyId             String
+  userId                String   @unique
+  emailEnabled          Boolean  @default(true)
+  webPushEnabled        Boolean  @default(false)
+  approvalPendingEmail  Boolean  @default(true)
+  approvalReviewedEmail Boolean  @default(true)
+  leaveReminderEmail    Boolean  @default(true)
+  missingRecordEmail    Boolean  @default(true)
+  monthCloseEmail       Boolean  @default(true)
+  schedulerDigestEnabled Boolean @default(true)
+  managerDailyDigestEnabled Boolean @default(true)
+  approvalMuted         Boolean  @default(false)
+  leaveMuted            Boolean  @default(false)
+  missingRecordMuted    Boolean  @default(false)
+  monthCloseMuted       Boolean  @default(false)
+  dailyDigestMuted      Boolean  @default(false)
+  approvalSnoozeUntil   DateTime?
+  leaveSnoozeUntil      DateTime?
+  missingRecordSnoozeUntil DateTime?
+  monthCloseSnoozeUntil DateTime?
+  dailyDigestSnoozeUntil DateTime?
+  browserPermission     String   @default("default")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, updatedAt])
+}
+
+model NotificationDispatchLog {
+  id          String           @id @default(cuid())
+  companyId   String
+  userId      String
+  type        NotificationType
+  channel     String
+  dedupeKey   String           @unique
+  status      String           @default("sent")
+  detail      String?
+  createdAt   DateTime         @default(now())
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model RiskSignal {
+  id          String      @id @default(cuid())
+  companyId   String
+  userId      String
+  sessionId   String?
+  assignedToId String?
+  signature   String
+  type        RiskType
+  level       RiskLevel
+  status      RiskWorkflowStatus @default(OPEN)
+  title       String
+  message     String
+  workflowNote String?
+  resolutionNote String?
+  resolutionType RiskResolutionType @default(NONE)
+  resolutionReferenceId String?
+  resolutionReferenceLabel String?
+  evidence    Json?
+  detectedAt  DateTime    @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedTo  User?       @relation("AssignedRiskSignals", fields: [assignedToId], references: [id], onDelete: SetNull)
+  session     WorkSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, detectedAt])
+  @@index([companyId, type])
+  @@index([userId, detectedAt])
+  @@index([companyId, status, detectedAt])
+  @@index([assignedToId, status])
+  @@index([companyId, userId, signature])
+}
+
+model WorkThread {
+  id            String               @id @default(cuid())
+  companyId     String
+  targetType    WorkThreadTargetType
+  targetId      String
+  title         String
+  status        WorkThreadStatus     @default(OPEN)
+  priority      WorkThreadPriority   @default(NORMAL)
+  assigneeId    String?
+  createdById   String?
+  lastCommentAt DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignee      User?                @relation("WorkThreadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy     User?                @relation("WorkThreadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  comments      WorkComment[]
+  readStates    WorkThreadReadState[]
+
+  @@unique([companyId, targetType, targetId])
+  @@index([companyId, status, lastCommentAt])
+  @@index([companyId, assigneeId, status])
+  @@index([targetType, targetId])
+}
+
+model WorkComment {
+  id        String     @id @default(cuid())
+  companyId String
+  threadId  String
+  authorId  String
+  body      String     @db.Text
+  mentions  Json?
+  deletedAt DateTime?
+  createdAt DateTime   @default(now())
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  thread    WorkThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User       @relation("WorkCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([threadId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model WorkThreadReadState {
+  id         String     @id @default(cuid())
+  companyId  String
+  threadId   String
+  userId     String
+  lastReadAt DateTime   @default(now())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  thread     WorkThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([companyId, userId, lastReadAt])
+}
+
+model Invitation {
+  id          String       @id @default(cuid())
+  companyId   String
+  teamId      String?
+  invitedById String?
+  name        String
+  email       String
+  role        Role         @default(EMPLOYEE)
+  token       String       @unique
+  status      InviteStatus @default(PENDING)
+  emailSentAt DateTime?
+  emailStatus String       @default("not_sent")
+  emailError  String?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  invitedBy   User?        @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([email])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  companyId   String
+  actorUserId String?
+  action      String
+  targetType  String
+  targetId    String
+  payload     Json?
+  createdAt   DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([actorUserId])
+}

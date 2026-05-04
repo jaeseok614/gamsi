@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gamsi
+          POSTGRES_USER: gamsi
+          POSTGRES_PASSWORD: gamsi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gamsi -d gamsi"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://gamsi:gamsi@localhost:5432/gamsi?schema=public
+      AUTH_SECRET: ci-only-secret-change-in-production-32chars
+      APP_BASE_URL: http://localhost:3000
+      SMTP_HOST: ""
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: "WorkGuard CI <no-reply@example.com>"
+      WEB_PUSH_SUBJECT: mailto:ci@example.com
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      QA_BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate CI VAPID keys
+        run: node scripts/generate-vapid-keys.mjs | tr -d '"' >> "$GITHUB_ENV"
+
+      - name: Prepare database
+        run: |
+          npm run db:push
+          npm run db:seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start app
+        run: |
+          npm run start > /tmp/workguard-next.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/workguard-next.log
+          exit 1
+
+      - name: Smoke QA
+        run: npm run qa:smoke
+
+      - name: Playwright E2E
+        run: npm run qa:e2e
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts
+          path: |
+            /tmp/workguard-next.log
+            test-results
+            playwright-report
+          if-no-files-found: ignore
