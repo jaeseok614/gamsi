@@ -81,6 +81,8 @@ The rehearsal verifies required environment variables, backup tools, typecheck/l
 
 ## 6. VPS Deploy Command
 
+This step is deferred until the GitHub repository, production domain, and VPS target are decided. The pending checklist is tracked in [NEXT_STEPS.md](NEXT_STEPS.md).
+
 After the GitHub repository exists and the VPS has Docker, Docker Compose, Git, and SSH access configured:
 
 ```bash

@@ -88,6 +88,7 @@ WEB_PUSH_VAPID_PRIVATE_KEY="..."
 - 현장 출퇴근 큐는 `IndexedDB + background sync`를 사용합니다. 서버 충돌이 난 항목은 자동 재전송하지 않고 `확인 필요` 상태로 남깁니다.
 - 운영 체크리스트는 [docs/OPERATIONS.md](docs/OPERATIONS.md)에 정리되어 있습니다.
 - Docker VPS 배포 절차는 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)에 정리되어 있습니다.
+- GitHub, 도메인, VPS가 정해진 뒤 진행할 후속 작업은 [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md)에 정리되어 있습니다.
 
 ## Bootstrap Admin
 
