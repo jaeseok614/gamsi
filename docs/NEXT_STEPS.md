@@ -27,6 +27,6 @@ npm run ops:deploy-rehearsal -- --base-url=https://your-domain.example --require
 ## Next Local Development Priorities
 
 - Continue mobile field UX polish after more real device checks.
-- Expand payroll and risk calculation edge-case coverage.
-- Add object storage support for production attachments.
+- Run an object-storage rehearsal against the selected S3-compatible provider.
+- Add payroll and risk calculation cases from real customer payroll samples.
 - Add GPS verification only after consent, retention, and privacy copy are finalized.

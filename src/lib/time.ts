@@ -64,6 +64,23 @@ export function kstMonthBounds(monthString = getKstDateString().slice(0, 7)) {
   return { start, end };
 }
 
+export function monthDateBounds(monthString = getKstDateString().slice(0, 7)) {
+  const [year, month] = monthString.split("-").map(Number);
+  const startString = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-01`;
+  const nextMonthYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const endString = `${String(nextMonthYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}-01`;
+  const lastDate = new Date(`${endString}T00:00:00.000Z`);
+  lastDate.setUTCDate(lastDate.getUTCDate() - 1);
+
+  return {
+    start: dateOnly(startString),
+    end: dateOnly(endString),
+    startString,
+    endString: lastDate.toISOString().slice(0, 10)
+  };
+}
+
 export function minutesBetween(start: Date, end: Date) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / MINUTE_MS));
 }

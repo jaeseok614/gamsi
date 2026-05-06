@@ -22,11 +22,13 @@ Recommended:
 
 - `SMTP_*` for invitations and password reset.
 - `WEB_PUSH_*` from `npm run push:vapid` for browser push.
+- `ATTACHMENT_STORAGE_DRIVER=s3` and `S3_*` for production attachments, groupware documents, and document library files.
 
 Production rules:
 
 - `APP_BASE_URL` must be the public `https://` origin.
 - `AUTH_SECRET` must be 32+ random characters and must not include any placeholder text.
+- Production attachments should use an S3-compatible private bucket. Keep `S3_KEY_PREFIX` unique per environment, and grant the app `PutObject`/`GetObject` only for that prefix.
 - Do not commit `.env.production`.
 
 ## 3. Database Strategy

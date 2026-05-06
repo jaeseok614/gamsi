@@ -1119,6 +1119,13 @@ export async function getDocumentAttachmentForActor(actor: Actor, attachmentId: 
       documentRequest: {
         is: visibleDocumentWhere(actor)
       }
+    },
+    include: {
+      documentRequest: {
+        select: {
+          requesterId: true
+        }
+      }
     }
   });
   if (!attachment) {
@@ -1134,6 +1141,13 @@ export async function getAnnouncementAttachmentForActor(actor: Actor, attachment
       companyId: actor.companyId,
       announcement: {
         is: visibleAnnouncementWhere(actor)
+      }
+    },
+    include: {
+      announcement: {
+        select: {
+          authorId: true
+        }
       }
     }
   });

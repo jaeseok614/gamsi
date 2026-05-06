@@ -21,7 +21,7 @@ import {
 } from "@/lib/policy-engine";
 import { prisma } from "@/lib/prisma";
 import { getMonthlyReport } from "@/lib/reports";
-import { getKstDateString, kstMonthBounds } from "@/lib/time";
+import { getKstDateString, kstMonthBounds, monthDateBounds } from "@/lib/time";
 
 type Actor = Pick<User, "id" | "companyId" | "role">;
 
@@ -33,12 +33,6 @@ function getLockReason(monthCloseEvents: Array<{ type: string; detail: unknown }
 
   const detail = closedEvent.detail as Record<string, unknown>;
   return typeof detail.lockReason === "string" && detail.lockReason.trim() ? detail.lockReason.trim() : null;
-}
-
-function addDays(dateString: string, offset: number) {
-  const date = new Date(`${dateString}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
 }
 
 function csvLine(values: string[]) {
@@ -59,9 +53,10 @@ export async function getPayrollReport(actor: Actor, month = getKstDateString().
   }
 
   const monthlyReport = await getMonthlyReport(actor, month);
-  const monthStart = `${month}-01`;
+  const dateBounds = monthDateBounds(month);
+  const monthStart = dateBounds.startString;
   const { start, end } = kstMonthBounds(month);
-  const monthEnd = addDays(end.toISOString().slice(0, 10), -1);
+  const monthEnd = dateBounds.endString;
 
   const [policy, policyVersions, holidays, monthClose, recentMonthCloses, monthCloseEvents, reopenRequests, users, missingRecordRisks] =
     await Promise.all([

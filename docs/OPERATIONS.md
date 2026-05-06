@@ -16,9 +16,11 @@
 
 - 초대/알림을 쓰는 환경은 `SMTP_*`를 설정한다.
 - 웹푸시를 쓰는 환경은 `WEB_PUSH_SUBJECT`, `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`를 설정한다.
+- 운영 첨부파일은 `ATTACHMENT_STORAGE_DRIVER=s3`와 `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`를 설정한다.
 - 관리자 설정의 `도입/배포 온보딩`에서 샘플 데이터 상태를 확인하고 운영 전 제거한다.
 - 관리자 설정의 `현장 QR 출퇴근`에서 근무지를 등록하고 QR 발급/사용 로그를 확인한다.
 - 현장 태블릿/PC에는 `/admin/qr-display`를 열어 60초 갱신 QR이 표시되는지 확인한다.
+- 첨부/자료실 다운로드는 감사 로그 `attachment.downloaded`로 남는다. 운영 점검 때 관리자 설정의 `증빙 보안과 감사` 최근 다운로드와 DB 감사 로그를 함께 확인한다.
 
 ## 백업/복구
 

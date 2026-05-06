@@ -80,6 +80,32 @@ export async function recordAttachmentDownload(input: {
   });
 }
 
+export async function recordGroupwareAttachmentDownload(input: {
+  companyId: string;
+  actorUserId: string;
+  targetType: "announcement_attachment" | "document_attachment" | "document_library_version";
+  targetId: string;
+  originalName: string;
+  sourceType: "announcement" | "document_request" | "document_library";
+  sourceId: string;
+  ownerUserId?: string | null;
+}) {
+  await writeAuditLog({
+    companyId: input.companyId,
+    actorUserId: input.actorUserId,
+    action: "attachment.downloaded",
+    targetType: input.targetType,
+    targetId: input.targetId,
+    payload: {
+      attachmentId: input.targetId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      originalName: input.originalName,
+      requesterId: input.ownerUserId ?? null
+    }
+  });
+}
+
 export async function getEvidenceSecuritySummary(companyId: string) {
   const settings = await getEvidenceSecuritySettings(companyId);
   const retentionCutoff = new Date(Date.now() - settings.retentionDays * 24 * 60 * 60 * 1000);

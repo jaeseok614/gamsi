@@ -67,6 +67,18 @@ async function requestJson(request, cookie, path, method = "GET", body) {
   return response.json();
 }
 
+async function requestMultipart(request, cookie, path, multipart) {
+  const response = await request.fetch(path, {
+    method: "POST",
+    headers: {
+      cookie
+    },
+    multipart
+  });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
 async function requestStatus(request, cookie, path, method = "GET", body) {
   const response = await request.fetch(path, {
     method,
@@ -172,6 +184,67 @@ test("회사별 리포트와 첨부 파일은 다른 회사 사용자에게 노�
     }
   });
   expect(downloadAuditCount).toBeGreaterThanOrEqual(2);
+
+  const announcement = await requestMultipart(request, adminCookie, "/api/groupware/announcements", {
+    title: `PW RBAC 공지 ${Date.now()}`,
+    body: "다른 회사에는 보이면 안 되는 공지",
+    audience: "ALL",
+    attachments: {
+      name: "company-notice.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("main company notice")
+    }
+  });
+  const announcementAttachment = await prisma.announcementAttachment.findFirstOrThrow({
+    where: {
+      announcementId: announcement.id
+    }
+  });
+  const otherCompanyAnnouncementDownload = await request.fetch(`/api/groupware/announcement-attachments/${announcementAttachment.id}`, {
+    headers: {
+      cookie: otherCompanyCookie
+    }
+  });
+  expect(otherCompanyAnnouncementDownload.status()).toBe(404);
+
+  const document = await requestMultipart(request, await loginApi(request, attachmentOwner.email), "/api/groupware/document-requests", {
+    title: `PW RBAC 문서 ${Date.now()}`,
+    body: "다른 회사에는 보이면 안 되는 결재",
+    category: "GENERAL",
+    attachments: {
+      name: "company-document.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("main company document")
+    }
+  });
+  const documentAttachment = await prisma.documentAttachment.findFirstOrThrow({
+    where: {
+      documentRequestId: document.id
+    }
+  });
+  const otherCompanyDocumentDownload = await request.fetch(`/api/groupware/document-attachments/${documentAttachment.id}`, {
+    headers: {
+      cookie: otherCompanyCookie
+    }
+  });
+  expect(otherCompanyDocumentDownload.status()).toBe(404);
+
+  const library = await requestMultipart(request, adminCookie, "/api/groupware/library", {
+    title: `PW RBAC 자료 ${Date.now()}`,
+    category: "POLICY",
+    accessScope: "ALL",
+    file: {
+      name: "company-library.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("main company library")
+    }
+  });
+  const otherCompanyLibraryDownload = await request.fetch(`/api/groupware/library/versions/${library.version.id}`, {
+    headers: {
+      cookie: otherCompanyCookie
+    }
+  });
+  expect(otherCompanyLibraryDownload.status()).toBe(404);
 
   const mainCompanyReport = await requestJson(request, hrCookie, `/api/reports/payroll?month=${kstDate().slice(0, 7)}`);
   expect(mainCompanyReport.payrollRows.some((row) => row.user.email === otherCompanyHr.user.email)).toBeFalsy();

@@ -35,6 +35,8 @@ test("모바일 현장 첫 화면에서 출퇴근, QR, 신청, 하단 이동이 
   await page.goto("/dashboard?view=employee", { waitUntil: "domcontentloaded" });
 
   await expect(page.locator(".employee-mobile-focus")).toBeVisible();
+  await expect(page.getByTestId("field-mobile-readiness")).toBeVisible();
+  await expect(page.getByText("현장 기록")).toBeVisible();
   await expect(page.getByRole("link", { name: "QR" })).toBeVisible();
   await expect(page.getByTestId("attendance-check-in")).toBeVisible();
   await expect(page.getByTestId("attendance-check-out")).toBeVisible();

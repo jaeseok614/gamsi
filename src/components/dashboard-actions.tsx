@@ -1122,6 +1122,105 @@ export function FieldQueueStatusBar() {
   );
 }
 
+export function FieldMobileReadinessCard() {
+  const [queueCount, setQueueCount] = useState(0);
+  const [blockedCount, setBlockedCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    return window.navigator.onLine;
+  });
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncState = async () => {
+      const [queue, meta] = await Promise.all([listFieldQueue().catch(() => []), getFieldQueueMeta().catch(() => ({ lastSyncAt: null }))]);
+      setQueueCount(queue.length);
+      setBlockedCount(queue.filter((item) => item.status === "blocked").length);
+      setLastSyncAt(meta.lastSyncAt);
+      setIsOnline(window.navigator.onLine);
+    };
+    const handleOnline = () => {
+      setIsOnline(true);
+      void syncState();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      void syncState();
+    };
+    const handleSyncEvent = () => {
+      void syncState();
+    };
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === "FIELD_QUEUE_SYNC_RESULT") {
+        void syncState();
+      }
+    };
+
+    void syncState();
+    window.addEventListener("storage", handleSyncEvent);
+    window.addEventListener(FIELD_QUEUE_SYNC_EVENT, handleSyncEvent as EventListener);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+
+    return () => {
+      window.removeEventListener("storage", handleSyncEvent);
+      window.removeEventListener(FIELD_QUEUE_SYNC_EVENT, handleSyncEvent as EventListener);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, []);
+
+  async function handleSyncNow() {
+    if (!isOnline || queueCount === 0) {
+      return;
+    }
+
+    setIsSyncing(true);
+    await flushFieldQueue().catch(() => null);
+    const [queue, meta] = await Promise.all([listFieldQueue().catch(() => []), getFieldQueueMeta().catch(() => ({ lastSyncAt: null }))]);
+    setQueueCount(queue.length);
+    setBlockedCount(queue.filter((item) => item.status === "blocked").length);
+    setLastSyncAt(meta.lastSyncAt);
+    setIsSyncing(false);
+  }
+
+  return (
+    <div className="field-mobile-readiness" data-testid="field-mobile-readiness">
+      <div>
+        <span>{isOnline ? <Wifi size={15} /> : <WifiOff size={15} />} 현장 기록</span>
+        <strong>{isOnline ? (queueCount > 0 ? `대기 ${queueCount}건` : "즉시 전송") : `기기 저장 ${queueCount}건`}</strong>
+      </div>
+      <div>
+        <span>충돌</span>
+        <strong>{blockedCount > 0 ? `${blockedCount}건` : "없음"}</strong>
+      </div>
+      <div>
+        <span>동기화</span>
+        <strong>{lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "-"}</strong>
+      </div>
+      <button
+        className="button secondary"
+        type="button"
+        disabled={!isOnline || queueCount === 0 || isSyncing}
+        onClick={() => void handleSyncNow()}
+      >
+        {isSyncing ? <RefreshCw size={15} /> : <Upload size={15} />}
+        {isSyncing ? "전송 중" : "동기화"}
+      </button>
+    </div>
+  );
+}
+
 export function AttendanceButtons({ canCheckIn, canCheckOut }: { canCheckIn: boolean; canCheckOut: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState("");

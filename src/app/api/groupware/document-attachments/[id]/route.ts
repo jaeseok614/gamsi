@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { jsonError, requireApiUser } from "@/lib/api";
+import { recordGroupwareAttachmentDownload } from "@/lib/evidence";
 import { getDocumentAttachmentForActor } from "@/lib/groupware";
 import { readStoredAttachment } from "@/lib/uploads";
 
@@ -21,6 +22,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const attachment = await getDocumentAttachmentForActor(user, params.id);
     const stored = await readStoredAttachment(attachment.storagePath);
+    await recordGroupwareAttachmentDownload({
+      companyId: user.companyId,
+      actorUserId: user.id,
+      targetType: "document_attachment",
+      targetId: attachment.id,
+      originalName: attachment.originalName,
+      sourceType: "document_request",
+      sourceId: attachment.documentRequestId,
+      ownerUserId: attachment.documentRequest.requesterId
+    });
     return new NextResponse(stored.content, {
       headers: {
         "content-type": attachment.mimeType,

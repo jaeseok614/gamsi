@@ -2,18 +2,12 @@ import { ApprovalType, type User } from "@/generated/prisma";
 
 import { getAnnualLeaveSummaryMap, getLeaveBalanceAdjustments } from "@/lib/leave";
 import { prisma } from "@/lib/prisma";
-import { formatMinutes, getKstDateString, kstMonthBounds } from "@/lib/time";
+import { formatMinutes, getKstDateString, kstMonthBounds, monthDateBounds } from "@/lib/time";
 
 type Actor = Pick<User, "companyId" | "role">;
 
 function dateKey(value: Date) {
   return value.toISOString().slice(0, 10);
-}
-
-function addDays(dateString: string, offset: number) {
-  const date = new Date(`${dateString}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
 }
 
 function requestCoversDate(
@@ -62,8 +56,9 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
   }
 
   const { start, end } = kstMonthBounds(month);
-  const monthStart = month.length === 7 ? `${month}-01` : month;
-  const monthEnd = addDays(end.toISOString().slice(0, 10), -1);
+  const dateBounds = monthDateBounds(month);
+  const monthStart = dateBounds.startString;
+  const monthEnd = dateBounds.endString;
   const [company, sessions, schedules, approvalRequests, users] = await Promise.all([
     prisma.company.findUniqueOrThrow({
       where: {
@@ -74,8 +69,8 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
       where: {
         companyId: actor.companyId,
         workDate: {
-          gte: start,
-          lt: end
+          gte: dateBounds.start,
+          lt: dateBounds.end
         }
       },
       include: {
@@ -96,8 +91,8 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
       where: {
         companyId: actor.companyId,
         workDate: {
-          gte: start,
-          lt: end
+          gte: dateBounds.start,
+          lt: dateBounds.end
         }
       },
       include: {
@@ -123,24 +118,24 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
             session: {
               is: {
                 workDate: {
-                  gte: start,
-                  lt: end
+                  gte: dateBounds.start,
+                  lt: dateBounds.end
                 }
               }
             }
           },
           {
             leaveStartDate: {
-              lt: end
+              lt: dateBounds.end
             },
             leaveEndDate: {
-              gte: start
+              gte: dateBounds.start
             }
           },
           {
             targetDate: {
-              gte: start,
-              lt: end
+              gte: dateBounds.start,
+              lt: dateBounds.end
             }
           }
         ]

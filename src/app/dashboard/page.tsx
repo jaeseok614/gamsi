@@ -35,6 +35,7 @@ import {
   AttendanceButtons,
   BrowserPushBridge,
   DashboardMobileNav,
+  FieldMobileReadinessCard,
   FieldQueueStatusBar,
   LeaveBalanceAdjustmentForm,
   LeaveBalanceAdjustmentRevokeButton,
@@ -985,6 +986,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       내역
                     </Link>
                   </div>
+                  <FieldMobileReadinessCard />
                 </div>
 
                 <div className="actions-row employee-desktop-summary" style={{ justifyContent: "space-between" }}>

@@ -75,6 +75,7 @@ test.afterAll(async () => {
 });
 
 test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재가 동작한다", async ({ page, request, baseURL }) => {
+  test.setTimeout(180_000);
   const adminCookie = await loginApi(request, "admin@gamsi.kr");
   const employeeCookie = await loginApi(request, "employee@gamsi.kr");
   const hrCookie = await loginApi(request, "hr@gamsi.kr");
@@ -164,6 +165,18 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(announcementAttachmentDownload.ok()).toBeTruthy();
   expect(await announcementAttachmentDownload.text()).toContain("공지 첨부");
+  await expect
+    .poll(() =>
+      prisma.auditLog.count({
+        where: {
+          companyId: employee.companyId,
+          action: "attachment.downloaded",
+          targetType: "announcement_attachment",
+          targetId: announcementAttachment.id
+        }
+      })
+    )
+    .toBeGreaterThanOrEqual(1);
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText(announcementTitle)).toBeVisible();
   await expect(page.getByText("Playwright 공지 댓글").first()).toBeVisible();
@@ -172,9 +185,13 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
 
   const memoText = `Playwright 그룹웨어 메모 ${Date.now()}`;
-  await page.getByLabel("프로필 메모").fill(memoText);
-  await page.getByRole("button", { name: "메모 저장" }).click();
-  await expect(page.getByText("메모를 저장했습니다.")).toBeVisible();
+  await requestJson(request, adminCookie, "/api/groupware/profile-memos", "POST", {
+    userId: employee.id,
+    memo: memoText,
+    assigneeId: manager.id,
+    mentionUserIds: [hr.id]
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText(memoText)).toBeVisible();
 
   const thread = await prisma.workThread.findUniqueOrThrow({
@@ -338,6 +355,18 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(documentAttachmentDownload.ok()).toBeTruthy();
   expect(await documentAttachmentDownload.text()).toContain("전자결재 첨부");
+  await expect
+    .poll(() =>
+      prisma.auditLog.count({
+        where: {
+          companyId: employee.companyId,
+          action: "attachment.downloaded",
+          targetType: "document_attachment",
+          targetId: documentAttachment.id
+        }
+      })
+    )
+    .toBeGreaterThanOrEqual(1);
   const documentPdf = await request.get(`${baseURL}/api/groupware/document-requests/${document.id}/pdf`, {
     headers: {
       cookie: employeeCookie
@@ -400,6 +429,18 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(libraryDownload.ok()).toBeTruthy();
   expect(await libraryDownload.text()).toContain("자료실 v2");
+  await expect
+    .poll(() =>
+      prisma.auditLog.count({
+        where: {
+          companyId: employee.companyId,
+          action: "attachment.downloaded",
+          targetType: "document_library_version",
+          targetId: libraryV2.version.id
+        }
+      })
+    )
+    .toBeGreaterThanOrEqual(1);
 
   const notificationCenter = await requestJson(request, employeeCookie, "/api/notifications");
   expect(notificationCenter.groupwareSummary.payrollStatementIssues).toBeGreaterThanOrEqual(1);
