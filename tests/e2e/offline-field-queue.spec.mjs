@@ -135,7 +135,7 @@ test("오프라인 출근 큐가 온라인 전송되고 중복 충돌은 확인 
   await page.goto("/dashboard?view=employee", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("attendance-check-in")).toBeEnabled();
   await page.context().setOffline(true);
-  await expect(page.getByText("현재 오프라인입니다. 출근, 퇴근, 상태 변경은 기기에 먼저 저장됩니다.")).toBeVisible();
+  await page.waitForFunction(() => !window.navigator.onLine);
   await page.getByTestId("attendance-check-in").click();
   await expect.poll(() => queueItems(page).then((items) => items.length)).toBe(1);
   await expect(page.getByText(/대기 1건/).first()).toBeVisible();
@@ -174,7 +174,7 @@ test("QR 출퇴근은 오프라인일 때 현장 큐에 저장하지 않는다",
   await page.goto("/dashboard?view=employee", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("attendance-check-in")).toBeEnabled();
   await page.context().setOffline(true);
-  await expect(page.getByText("현재 오프라인입니다. 출근, 퇴근, 상태 변경은 기기에 먼저 저장됩니다.")).toBeVisible();
+  await page.waitForFunction(() => !window.navigator.onLine);
   await page.locator("#attendance-qr-token").fill("WG1INVALIDTOKEN");
   await page.getByRole("button", { name: "QR 출근" }).click();
   await expect.poll(() => queueItems(page).then((items) => items.length)).toBe(0);

@@ -1,9 +1,11 @@
-import { Bell, BriefcaseBusiness, FileText, Mail, MessageSquareText, Phone, Search, Target, Users } from "lucide-react";
+import { Bell, BriefcaseBusiness, Download, FileText, FolderOpen, Mail, MessageSquareText, Paperclip, Phone, Search, Target, Users } from "lucide-react";
 import Link from "next/link";
 
 import {
   AnnouncementForm,
+  AnnouncementCommentForm,
   AnnouncementReadButton,
+  DocumentLibraryForm,
   DocumentRequestForm,
   DocumentReviewButtons,
   PayrollIssueForm,
@@ -78,6 +80,55 @@ function documentStatusLabel(status: string) {
   return "대기";
 }
 
+function announcementCategoryLabel(category: string) {
+  if (category === "RESOURCE") {
+    return "자료실";
+  }
+  if (category === "TEAM") {
+    return "팀 게시판";
+  }
+  if (category === "HR") {
+    return "HR 안내";
+  }
+  return "공지";
+}
+
+function documentCategoryLabel(category: string) {
+  if (category === "EXPENSE") {
+    return "지출결의서";
+  }
+  if (category === "PURCHASE") {
+    return "구매요청서";
+  }
+  return "품의서";
+}
+
+function libraryCategoryLabel(category: string) {
+  if (category === "CONTRACT") {
+    return "계약서";
+  }
+  if (category === "LEAVE") {
+    return "휴가 정책";
+  }
+  if (category === "PAYROLL") {
+    return "급여 안내";
+  }
+  if (category === "FORM") {
+    return "서식";
+  }
+  return "회사 규정";
+}
+
+function libraryScopeLabel(scope: string) {
+  if (scope === "TEAM") {
+    return "부서";
+  }
+  if (scope === "HR") {
+    return "HR/관리자";
+  }
+  return "전체";
+}
+
 export function GroupwarePanel({
   organization,
   groupware,
@@ -124,6 +175,37 @@ export function GroupwarePanel({
           <strong>{groupware.unreadAnnouncementCount}건</strong>
         </div>
       </div>
+
+      <form action="/dashboard" className="panel inline-form">
+        <input type="hidden" name="view" value="groupware" />
+        <div className="grid-2">
+          <div className="field">
+            <label htmlFor="groupware-integrated-search">통합 검색</label>
+            <input id="groupware-integrated-search" name="groupwareSearch" defaultValue={groupware.searchQuery} placeholder="직원, 공지, 메모, 결재, 급여명세, 자료" />
+          </div>
+          <button className="button" type="submit" style={{ alignSelf: "end" }}>
+            <Search size={16} />
+            전체 검색
+          </button>
+        </div>
+        {groupware.searchQuery ? (
+          <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+            {groupware.searchResults.length > 0 ? (
+              groupware.searchResults.map((result, index) => (
+                <Link className="notification-card read" href={result.href} key={`${result.type}-${index}`} style={{ textDecoration: "none" }}>
+                  <div>
+                    <span className="status-pill gray">{result.label}</span>
+                    <strong style={{ display: "block", marginTop: 6 }}>{result.title}</strong>
+                    <p className="muted" style={{ margin: "6px 0 0" }}>{result.description}</p>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="empty">검색 결과가 없습니다.</div>
+            )}
+          </div>
+        ) : null}
+      </form>
 
       <form action="/dashboard" className="panel inline-form">
         <input type="hidden" name="view" value="groupware" />
@@ -181,15 +263,42 @@ export function GroupwarePanel({
                     <div>
                       <div className="actions-row">
                         <strong>{announcement.title}</strong>
+                        <span className="status-pill gray">{announcementCategoryLabel(announcement.category)}</span>
                         <span className="status-pill gray">{announcement.audience === "TEAM" ? announcement.team?.name ?? "팀" : "전체"}</span>
                         {announcement.isPinned ? <span className="status-pill yellow">고정</span> : null}
+                        {!announcement.isPublished ? <span className="status-pill yellow">예약</span> : null}
                       </div>
                       <p className="muted" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>
                         {announcement.body}
                       </p>
+                      {announcement.attachments.length > 0 ? (
+                        <div className="actions-row" style={{ marginTop: 8 }}>
+                          {announcement.attachments.map((attachment) => (
+                            <a className="button secondary" href={`/api/groupware/announcement-attachments/${attachment.id}`} key={attachment.id}>
+                              <Paperclip size={14} />
+                              {attachment.originalName}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                       <p className="muted" style={{ margin: "6px 0 0" }}>
-                        {announcement.author.name} · 읽음 {announcement._count.reads}명 · {formatKstDateTime(announcement.createdAt)}
+                        {announcement.author.name} · 읽음 {announcement.readStats.readCount}/{announcement.readStats.recipientCount}명 · 미확인 {announcement.readStats.unreadCount}명 · {formatKstDateTime(announcement.publishAt ?? announcement.createdAt)}
                       </p>
+                      {groupware.canManageGroupware && announcement.readStats.unreadUsers.length > 0 ? (
+                        <p className="muted" style={{ margin: "6px 0 0" }}>
+                          미확인: {announcement.readStats.unreadUsers.map((user) => user.name).join(", ")}
+                        </p>
+                      ) : null}
+                      {announcement.comments.length > 0 ? (
+                        <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+                          {announcement.comments.map((comment) => (
+                            <p className="muted" key={comment.id} style={{ margin: 0 }}>
+                              {comment.author.name}: {comment.body}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                      {announcement.allowComments ? <AnnouncementCommentForm announcementId={announcement.id} /> : null}
                     </div>
                     <AnnouncementReadButton announcementId={announcement.id} isRead={announcement.isReadByViewer} />
                   </div>
@@ -427,15 +536,43 @@ export function GroupwarePanel({
                   <div className="notification-card read" key={document.id}>
                     <div>
                       <div className="actions-row">
-                        <strong>{document.title}</strong>
+                        <strong>{document.documentNumber ?? "문서번호 미정"} · {document.title}</strong>
                         <span className={`status-pill ${document.status === "PENDING" ? "yellow" : document.status === "APPROVED" ? "green" : "red"}`}>
                           {documentStatusLabel(document.status)}
                         </span>
                       </div>
                       <p className="muted" style={{ margin: "6px 0 0" }}>
-                        {document.category} · 요청 {document.requester.name} · 결재 {document.reviewer?.name ?? "미지정"}
+                        {documentCategoryLabel(document.category)} · 요청 {document.requester.name} · 현재 결재 {document.reviewer?.name ?? "미지정"}
                       </p>
                       <p className="muted" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{document.body}</p>
+                      <div className="actions-row" style={{ marginTop: 8 }}>
+                        {document.approvalSteps.map((step) => (
+                          <span className={`status-pill ${step.status === "APPROVED" ? "green" : step.status === "REJECTED" ? "red" : "yellow"}`} key={step.id}>
+                            {step.label}: {step.approver?.name ?? "-"}
+                          </span>
+                        ))}
+                      </div>
+                      {document.attachments.length > 0 ? (
+                        <div className="actions-row" style={{ marginTop: 8 }}>
+                          {document.attachments.map((attachment) => (
+                            <a className="button secondary" href={`/api/groupware/document-attachments/${attachment.id}`} key={attachment.id}>
+                              <Paperclip size={14} />
+                              {attachment.originalName}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="actions-row" style={{ marginTop: 8 }}>
+                        <a className="button secondary" href={`/api/groupware/document-requests/${document.id}/pdf`}>
+                          <Download size={14} />
+                          PDF
+                        </a>
+                        {document.workThread ? (
+                          <Link className="button secondary" href={`/dashboard?view=workbox&workThreadId=${document.workThread.id}`}>
+                            댓글 {document.workThread._count.comments}개
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
                     {groupware.canManageGroupware && document.status === "PENDING" ? <DocumentReviewButtons documentId={document.id} /> : null}
                   </div>
@@ -443,6 +580,57 @@ export function GroupwarePanel({
               </div>
             ) : (
               <div className="empty">전자결재 문서가 없습니다.</div>
+            )}
+          </section>
+
+          <section id="groupware-library" className="panel stack">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <h2 style={{ margin: 0 }}>
+                <FolderOpen size={20} /> 문서함/자료실
+              </h2>
+              <span className="status-pill gray">{groupware.libraryItems.length}건</span>
+            </div>
+            {groupware.canManageGroupware ? (
+              <div className="panel stack" style={{ background: "#fbfdff" }}>
+                <DocumentLibraryForm
+                  items={groupware.libraryItems.map((item) => ({ id: item.id, title: item.title }))}
+                  teams={organization.selectableTeams}
+                />
+              </div>
+            ) : null}
+            {groupware.libraryItems.length > 0 ? (
+              <div className="stack" style={{ gap: 8 }}>
+                {groupware.libraryItems.map((item) => (
+                  <div className="notification-card read" key={item.id}>
+                    <div>
+                      <div className="actions-row">
+                        <strong>{item.title}</strong>
+                        <span className="status-pill gray">{libraryCategoryLabel(item.category)}</span>
+                        <span className="status-pill gray">{libraryScopeLabel(item.accessScope)}</span>
+                        {item.team ? <span className="status-pill gray">{item.team.name}</span> : null}
+                      </div>
+                      {item.description ? (
+                        <p className="muted" style={{ margin: "6px 0 0" }}>{item.description}</p>
+                      ) : null}
+                      <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+                        {item.versions.map((version) => (
+                          <div className="actions-row" key={version.id}>
+                            <a className="button secondary" href={`/api/groupware/library/versions/${version.id}`}>
+                              <Download size={14} />
+                              v{version.versionNo} {version.originalName}
+                            </a>
+                            <span className="muted">
+                              {version.uploadedBy.name} · {formatKstDateTime(version.createdAt)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">등록된 자료가 없습니다.</div>
             )}
           </section>
 

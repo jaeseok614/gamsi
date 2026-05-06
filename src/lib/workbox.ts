@@ -482,7 +482,7 @@ export async function ensureWorkThreadForDocumentRequest(documentRequestId: stri
     return null;
   }
 
-  const title = `${document.requester.name}님의 ${document.category} 결재`;
+  const title = `${document.documentNumber ?? "문서번호 미정"} · ${document.requester.name}님의 ${document.category} 결재`;
   const existing = await prisma.workThread.findUnique({
     where: {
       companyId_targetType_targetId: {
@@ -677,7 +677,7 @@ async function targetSummary(thread: {
     if (!document) {
       return "전자결재 문서를 찾을 수 없음";
     }
-    return `${document.requester.name} · ${document.category} · ${document.status}`;
+    return `${document.documentNumber ?? "문서번호 미정"} · ${document.requester.name} · ${document.category} · ${document.status}`;
   }
 
   const monthClose = await prisma.monthClose.findUnique({

@@ -165,6 +165,114 @@ export async function saveApprovalAttachments(input: {
   );
 }
 
+export async function saveDocumentAttachments(input: {
+  companyId: string;
+  documentRequestId: string;
+  uploadedById: string;
+  files: File[];
+}) {
+  const files = validateApprovalAttachmentFiles(input.files);
+  if (files.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    files.map(async (file) => {
+      const safeName = sanitizeFileName(file.name);
+      const storedName = `${Date.now()}-${randomBytes(4).toString("hex")}-${safeName}`;
+      const stored = await attachmentStorage.write({
+        directory: `${input.companyId}/document-requests/${input.documentRequestId}`,
+        fileName: storedName,
+        content: Buffer.from(await file.arrayBuffer())
+      });
+
+      return prisma.documentAttachment.create({
+        data: {
+          companyId: input.companyId,
+          documentRequestId: input.documentRequestId,
+          uploadedById: input.uploadedById,
+          originalName: file.name,
+          mimeType: attachmentMimeType(file),
+          sizeBytes: file.size,
+          storagePath: stored.storagePath
+        }
+      });
+    })
+  );
+}
+
+export async function saveAnnouncementAttachments(input: {
+  companyId: string;
+  announcementId: string;
+  uploadedById: string;
+  files: File[];
+}) {
+  const files = validateApprovalAttachmentFiles(input.files);
+  if (files.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    files.map(async (file) => {
+      const safeName = sanitizeFileName(file.name);
+      const storedName = `${Date.now()}-${randomBytes(4).toString("hex")}-${safeName}`;
+      const stored = await attachmentStorage.write({
+        directory: `${input.companyId}/announcements/${input.announcementId}`,
+        fileName: storedName,
+        content: Buffer.from(await file.arrayBuffer())
+      });
+
+      return prisma.announcementAttachment.create({
+        data: {
+          companyId: input.companyId,
+          announcementId: input.announcementId,
+          uploadedById: input.uploadedById,
+          originalName: file.name,
+          mimeType: attachmentMimeType(file),
+          sizeBytes: file.size,
+          storagePath: stored.storagePath
+        }
+      });
+    })
+  );
+}
+
+export async function saveDocumentLibraryVersionFile(input: {
+  companyId: string;
+  itemId: string;
+  uploadedById: string;
+  versionNo: number;
+  note?: string | null;
+  file: File;
+}) {
+  const [file] = validateApprovalAttachmentFiles([input.file]);
+  if (!file) {
+    throw new Error("자료실 파일을 첨부하세요.");
+  }
+
+  const safeName = sanitizeFileName(file.name);
+  const storedName = `${Date.now()}-${randomBytes(4).toString("hex")}-${safeName}`;
+  const stored = await attachmentStorage.write({
+    directory: `${input.companyId}/library/${input.itemId}`,
+    fileName: storedName,
+    content: Buffer.from(await file.arrayBuffer())
+  });
+
+  return prisma.documentLibraryVersion.create({
+    data: {
+      companyId: input.companyId,
+      itemId: input.itemId,
+      uploadedById: input.uploadedById,
+      versionNo: input.versionNo,
+      note: input.note?.trim() || null,
+      originalName: file.name,
+      mimeType: attachmentMimeType(file),
+      sizeBytes: file.size,
+      storagePath: stored.storagePath
+    }
+  });
+}
+
 export async function readStoredAttachment(storagePath: string) {
   return attachmentStorage.read(storagePath);
 }

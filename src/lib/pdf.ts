@@ -3,10 +3,13 @@ import fs from "node:fs";
 import PDFDocument from "pdfkit";
 
 import type { EvidencePackageData } from "@/lib/evidence-package";
+import type { getDocumentRequestForActor } from "@/lib/groupware";
 import type { getLaborRiskReport } from "@/lib/risks";
 import { formatKstDateTime, formatMinutes } from "@/lib/time";
+import { formatFileSize } from "@/lib/uploads";
 
 type LaborRiskReport = Awaited<ReturnType<typeof getLaborRiskReport>>;
+type GroupwareDocument = Awaited<ReturnType<typeof getDocumentRequestForActor>>;
 
 const PAGE = {
   left: 42,
@@ -476,6 +479,113 @@ export async function renderEvidencePackagePdf(data: EvidencePackageData) {
   for (let i = pageRange.start; i < pageRange.start + pageRange.count; i += 1) {
     doc.switchToPage(i);
     doc.fillColor("#9CA3AF").fontSize(8).text(`WorkGuard Evidence · ${i + 1} / ${pageRange.count}`, PAGE.left, 812, {
+      align: "center",
+      width: PAGE.width
+    });
+  }
+
+  const output = new Promise<Buffer>((resolve, reject) => {
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+
+  doc.end();
+
+  return output;
+}
+
+function documentStatusText(status: string) {
+  if (status === "APPROVED") {
+    return "승인";
+  }
+  if (status === "REJECTED") {
+    return "반려";
+  }
+  return "진행 중";
+}
+
+function documentCategoryText(category: string) {
+  if (category === "EXPENSE") {
+    return "지출결의서";
+  }
+  if (category === "PURCHASE") {
+    return "구매요청서";
+  }
+  return "품의서";
+}
+
+export async function renderDocumentRequestPdf(document: GroupwareDocument) {
+  const doc = new PDFDocument({ size: "A4", margin: 42, bufferPages: true });
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+  const fontPath = findKoreanFont();
+  if (fontPath) {
+    doc.font(fontPath);
+  }
+
+  doc.fillColor("#111827").fontSize(20).text(documentCategoryText(document.category), PAGE.left, 46, {
+    width: PAGE.width
+  });
+  doc.moveDown(0.4);
+  doc.fillColor("#6B7280").fontSize(10).text(document.documentNumber ?? "문서번호 미정", PAGE.left, doc.y);
+  doc.moveDown(1);
+
+  infoGrid(doc, [
+    ["제목", document.title],
+    ["상태", documentStatusText(document.status)],
+    ["상신자", `${document.requester.name} · ${document.requester.team?.name ?? "소속 없음"}`],
+    ["상신일", formatKstDateTime(document.createdAt)],
+    ["현재 결재자", document.reviewer?.name ?? "-"],
+    ["금액", document.amount ? `${document.amount.toLocaleString("ko-KR")}원` : "-"]
+  ]);
+
+  sectionTitle(doc, "본문");
+  doc.fillColor("#111827").fontSize(10).text(document.body, PAGE.left, doc.y, {
+    width: PAGE.width,
+    lineGap: 4
+  });
+
+  sectionTitle(doc, "결재선");
+  tableHeader(doc, ["순서", "단계", "결재자", "상태", "처리일", "메모"], [42, 90, 76, 58, 92, 153]);
+  for (const step of document.approvalSteps) {
+    tableRow(doc, [
+      String(step.stepOrder),
+      step.label,
+      step.approver?.name ?? "-",
+      documentStatusText(step.status),
+      step.reviewedAt ? formatKstDateTime(step.reviewedAt) : "-",
+      step.reviewNote ?? "-"
+    ], [42, 90, 76, 58, 92, 153]);
+  }
+
+  sectionTitle(doc, "첨부");
+  if (document.attachments.length > 0) {
+    tableHeader(doc, ["파일명", "형식", "크기", "등록자", "등록일"], [184, 92, 58, 76, 101]);
+    for (const attachment of document.attachments) {
+      tableRow(doc, [
+        attachment.originalName,
+        attachment.mimeType,
+        formatFileSize(attachment.sizeBytes),
+        attachment.uploadedBy.name,
+        formatKstDateTime(attachment.createdAt)
+      ], [184, 92, 58, 76, 101]);
+    }
+  } else {
+    tableRow(doc, ["첨부 파일이 없습니다.", "", "", "", ""], [184, 92, 58, 76, 101]);
+  }
+
+  sectionTitle(doc, "확인란");
+  ensureSpace(doc, 70);
+  const signY = doc.y;
+  doc.rect(PAGE.left, signY, PAGE.width, 62).stroke("#D1D5DB");
+  doc.fillColor("#111827").fontSize(10).text("최종 확인자: ____________________", PAGE.left + 12, signY + 18);
+  doc.text("확인일: ____________________", PAGE.left + 300, signY + 18);
+
+  const pageRange = doc.bufferedPageRange();
+  for (let i = pageRange.start; i < pageRange.start + pageRange.count; i += 1) {
+    doc.switchToPage(i);
+    doc.fillColor("#9CA3AF").fontSize(8).text(`WorkGuard Document · ${i + 1} / ${pageRange.count}`, PAGE.left, 812, {
       align: "center",
       width: PAGE.width
     });

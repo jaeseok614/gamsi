@@ -104,9 +104,18 @@ async function main() {
   await prisma.workSchedule.deleteMany();
   await prisma.workSession.deleteMany();
   await prisma.attendanceEvent.deleteMany();
+  await prisma.workComment.deleteMany();
+  await prisma.workThreadReadState.deleteMany();
+  await prisma.workThread.deleteMany();
+  await prisma.documentLibraryVersion.deleteMany();
+  await prisma.documentLibraryItem.deleteMany();
+  await prisma.documentAttachment.deleteMany();
+  await prisma.documentApprovalStep.deleteMany();
   await prisma.documentRequest.deleteMany();
   await prisma.payrollStatementIssue.deleteMany();
   await prisma.performanceGoal.deleteMany();
+  await prisma.announcementComment.deleteMany();
+  await prisma.announcementAttachment.deleteMany();
   await prisma.announcementRead.deleteMany();
   await prisma.announcement.deleteMany();
   await prisma.user.deleteMany();

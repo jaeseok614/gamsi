@@ -209,6 +209,12 @@ enum DocumentRequestStatus {
   REJECTED
 }
 
+enum DocumentApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Company {
   id                    String             @id @default(cuid())
   name                  String
@@ -243,9 +249,15 @@ model Company {
   workThreadReadStates  WorkThreadReadState[]
   announcements         Announcement[]
   announcementReads     AnnouncementRead[]
+  announcementAttachments AnnouncementAttachment[]
+  announcementComments  AnnouncementComment[]
   performanceGoals      PerformanceGoal[]
   payrollStatementIssues PayrollStatementIssue[]
   documentRequests      DocumentRequest[]
+  documentApprovalSteps DocumentApprovalStep[]
+  documentAttachments   DocumentAttachment[]
+  documentLibraryItems  DocumentLibraryItem[]
+  documentLibraryVersions DocumentLibraryVersion[]
 }
 
 model Team {
@@ -262,6 +274,7 @@ model Team {
   invitations   Invitation[]
   announcements Announcement[]
   performanceGoals PerformanceGoal[]
+  documentLibraryItems DocumentLibraryItem[]
 
   @@index([companyId])
 }
@@ -313,6 +326,8 @@ model User {
   workThreadReadStates  WorkThreadReadState[]
   authoredAnnouncements Announcement[]      @relation("AnnouncementAuthor")
   announcementReads     AnnouncementRead[]
+  uploadedAnnouncementAttachments AnnouncementAttachment[] @relation("AnnouncementAttachmentUploadedBy")
+  announcementComments  AnnouncementComment[] @relation("AnnouncementCommentAuthor")
   performanceGoals      PerformanceGoal[]   @relation("PerformanceGoalUser")
   createdPerformanceGoals PerformanceGoal[] @relation("PerformanceGoalCreatedBy")
   reviewedPerformanceGoals PerformanceGoal[] @relation("PerformanceGoalReviewedBy")
@@ -321,6 +336,10 @@ model User {
   lockedPayrollStatements PayrollStatementIssue[] @relation("PayrollStatementLockedBy")
   requestedDocuments    DocumentRequest[]   @relation("DocumentRequester")
   reviewedDocuments     DocumentRequest[]   @relation("DocumentReviewer")
+  documentApprovalSteps DocumentApprovalStep[] @relation("DocumentApprovalStepApprover")
+  uploadedDocumentAttachments DocumentAttachment[] @relation("DocumentAttachmentUploadedBy")
+  createdDocumentLibraryItems DocumentLibraryItem[] @relation("DocumentLibraryItemCreatedBy")
+  uploadedDocumentLibraryVersions DocumentLibraryVersion[] @relation("DocumentLibraryVersionUploadedBy")
 
   @@index([companyId])
   @@index([teamId])
@@ -799,9 +818,12 @@ model Announcement {
   authorId    String
   teamId      String?
   audience    AnnouncementAudience @default(ALL)
+  category    String               @default("NOTICE")
   title       String
   body        String               @db.Text
   isPinned    Boolean              @default(false)
+  allowComments Boolean            @default(false)
+  publishAt   DateTime?
   emailStatus String               @default("not_sent")
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
@@ -809,8 +831,11 @@ model Announcement {
   author      User                 @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   team        Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
   reads       AnnouncementRead[]
+  attachments AnnouncementAttachment[]
+  comments    AnnouncementComment[]
 
   @@index([companyId, createdAt])
+  @@index([companyId, publishAt])
   @@index([teamId, createdAt])
 }
 
@@ -826,6 +851,42 @@ model AnnouncementRead {
 
   @@unique([announcementId, userId])
   @@index([companyId, userId, readAt])
+}
+
+model AnnouncementAttachment {
+  id             String       @id @default(cuid())
+  companyId      String
+  announcementId String
+  uploadedById   String
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  storagePath    String
+  createdAt      DateTime     @default(now())
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  uploadedBy     User         @relation("AnnouncementAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([announcementId])
+  @@index([uploadedById])
+}
+
+model AnnouncementComment {
+  id             String       @id @default(cuid())
+  companyId      String
+  announcementId String
+  authorId       String
+  body           String       @db.Text
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author         User         @relation("AnnouncementCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([announcementId, createdAt])
+  @@index([authorId, createdAt])
 }
 
 model PerformanceGoal {
@@ -886,10 +947,12 @@ model DocumentRequest {
   companyId   String
   requesterId String
   reviewerId  String?
+  documentNumber String?
   category    String                @default("GENERAL")
   title       String
   body        String                @db.Text
   amount      Float?
+  formData    Json?
   status      DocumentRequestStatus @default(PENDING)
   reviewNote  String?
   reviewedAt  DateTime?
@@ -898,10 +961,96 @@ model DocumentRequest {
   company     Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   requester   User                  @relation("DocumentRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   reviewer    User?                 @relation("DocumentReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  approvalSteps DocumentApprovalStep[]
+  attachments DocumentAttachment[]
 
   @@index([companyId, status, createdAt])
+  @@index([companyId, documentNumber])
   @@index([requesterId, createdAt])
   @@index([reviewerId, status])
+}
+
+model DocumentApprovalStep {
+  id                String                     @id @default(cuid())
+  companyId         String
+  documentRequestId String
+  stepOrder         Int
+  label             String
+  approverId        String?
+  approverRole      Role?
+  status            DocumentApprovalStepStatus @default(PENDING)
+  reviewNote        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  company           Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentRequest   DocumentRequest            @relation(fields: [documentRequestId], references: [id], onDelete: Cascade)
+  approver          User?                      @relation("DocumentApprovalStepApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  @@unique([documentRequestId, stepOrder])
+  @@index([companyId, status])
+  @@index([approverId, status])
+}
+
+model DocumentAttachment {
+  id                String          @id @default(cuid())
+  companyId         String
+  documentRequestId String
+  uploadedById      String
+  originalName      String
+  mimeType          String
+  sizeBytes         Int
+  storagePath       String
+  createdAt         DateTime        @default(now())
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentRequest   DocumentRequest @relation(fields: [documentRequestId], references: [id], onDelete: Cascade)
+  uploadedBy        User            @relation("DocumentAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([documentRequestId])
+  @@index([uploadedById])
+}
+
+model DocumentLibraryItem {
+  id          String   @id @default(cuid())
+  companyId   String
+  teamId      String?
+  createdById String
+  title       String
+  category    String   @default("POLICY")
+  accessScope String   @default("ALL")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy   User     @relation("DocumentLibraryItemCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  versions    DocumentLibraryVersion[]
+
+  @@index([companyId, category])
+  @@index([companyId, accessScope])
+  @@index([teamId])
+}
+
+model DocumentLibraryVersion {
+  id          String              @id @default(cuid())
+  companyId   String
+  itemId      String
+  uploadedById String
+  versionNo   Int
+  note        String?
+  originalName String
+  mimeType    String
+  sizeBytes   Int
+  storagePath String
+  createdAt   DateTime            @default(now())
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  item        DocumentLibraryItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  uploadedBy  User                @relation("DocumentLibraryVersionUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, versionNo])
+  @@index([companyId, createdAt])
+  @@index([uploadedById])
 }
 
 model Invitation {

@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, Paperclip, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -18,6 +18,20 @@ async function postJson(path: string, body: Record<string, unknown>) {
       "content-type": "application/json"
     },
     body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "요청 처리에 실패했습니다.");
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+async function postForm(path: string, formData: FormData) {
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData
   });
 
   if (!response.ok) {
@@ -55,6 +69,11 @@ export function AnnouncementForm({
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState("ALL");
   const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
+  const [category, setCategory] = useState("NOTICE");
+  const [publishAt, setPublishAt] = useState("");
+  const [isPinned, setIsPinned] = useState(false);
+  const [allowComments, setAllowComments] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -62,14 +81,23 @@ export function AnnouncementForm({
     setMessage("");
     startTransition(async () => {
       try {
-        await postJson("/api/groupware/announcements", {
-          title,
-          body,
-          audience,
-          teamId: audience === "TEAM" ? teamId : null
-        });
+        const formData = new FormData();
+        formData.set("title", title);
+        formData.set("body", body);
+        formData.set("audience", audience);
+        formData.set("teamId", audience === "TEAM" ? teamId : "");
+        formData.set("category", category);
+        formData.set("publishAt", publishAt);
+        formData.set("isPinned", String(isPinned));
+        formData.set("allowComments", String(allowComments));
+        files.forEach((file) => formData.append("attachments", file));
+        await postForm("/api/groupware/announcements", formData);
         setTitle("");
         setBody("");
+        setPublishAt("");
+        setIsPinned(false);
+        setAllowComments(false);
+        setFiles([]);
         setMessage("공지를 발행했습니다.");
         router.refresh();
       } catch (error) {
@@ -80,10 +108,19 @@ export function AnnouncementForm({
 
   return (
     <div className="stack" style={{ gap: 10 }}>
-      <div className="grid-2">
+      <div className="grid-3">
         <div className="field">
           <label htmlFor="announcement-title">공지 제목</label>
           <input id="announcement-title" value={title} onChange={(event) => setTitle(event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="announcement-category">분류</label>
+          <select id="announcement-category" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="NOTICE">공지</option>
+            <option value="RESOURCE">자료실</option>
+            <option value="TEAM">팀 게시판</option>
+            <option value="HR">HR 안내</option>
+          </select>
         </div>
         <div className="field">
           <label htmlFor="announcement-audience">대상</label>
@@ -109,10 +146,39 @@ export function AnnouncementForm({
         <label htmlFor="announcement-body">공지 내용</label>
         <textarea id="announcement-body" rows={4} value={body} onChange={(event) => setBody(event.target.value)} />
       </div>
+      <div className="grid-3">
+        <div className="field">
+          <label htmlFor="announcement-publish-at">예약 발행</label>
+          <input id="announcement-publish-at" type="datetime-local" value={publishAt} onChange={(event) => setPublishAt(event.target.value)} />
+        </div>
+        <label className="check-row" style={{ alignSelf: "end" }}>
+          <input type="checkbox" checked={isPinned} onChange={(event) => setIsPinned(event.target.checked)} />
+          상단 고정
+        </label>
+        <label className="check-row" style={{ alignSelf: "end" }}>
+          <input type="checkbox" checked={allowComments} onChange={(event) => setAllowComments(event.target.checked)} />
+          댓글 허용
+        </label>
+      </div>
+      <div className="field">
+        <label htmlFor="announcement-attachments">첨부파일</label>
+        <input
+          id="announcement-attachments"
+          type="file"
+          multiple
+          onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+        />
+      </div>
       <div className="actions-row">
         <button className="button" type="button" disabled={isPending || !title.trim() || !body.trim()} onClick={submit}>
+          <Upload size={15} />
           발행
         </button>
+        {files.length > 0 ? (
+          <span className="muted">
+            <Paperclip size={14} /> {files.length}개
+          </span>
+        ) : null}
         {message ? <span className="muted" aria-live="polite">{message}</span> : null}
       </div>
     </div>
@@ -141,6 +207,39 @@ export function AnnouncementReadButton({ announcementId, isRead }: { announcemen
     <div className="actions-row">
       <button className="button secondary" type="button" disabled={isPending || isRead} onClick={markRead}>
         {isRead ? "읽음" : "읽음 처리"}
+      </button>
+      {message ? <span className="muted">{message}</span> : null}
+    </div>
+  );
+}
+
+export function AnnouncementCommentForm({ announcementId }: { announcementId: string }) {
+  const router = useRouter();
+  const [body, setBody] = useState("");
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    setMessage("");
+    startTransition(async () => {
+      try {
+        await postJson(`/api/groupware/announcements/${announcementId}/comments`, {
+          body
+        });
+        setBody("");
+        setMessage("댓글을 저장했습니다.");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "댓글 저장에 실패했습니다.");
+      }
+    });
+  }
+
+  return (
+    <div className="actions-row">
+      <input aria-label="공지 댓글" value={body} onChange={(event) => setBody(event.target.value)} placeholder="댓글" />
+      <button className="button secondary" type="button" disabled={isPending || !body.trim()} onClick={submit}>
+        저장
       </button>
       {message ? <span className="muted">{message}</span> : null}
     </div>
@@ -378,6 +477,10 @@ export function DocumentRequestForm({
   const [body, setBody] = useState("");
   const [amount, setAmount] = useState("");
   const [reviewerId, setReviewerId] = useState(reviewers[0]?.id ?? "");
+  const [vendor, setVendor] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [budgetCode, setBudgetCode] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -385,16 +488,24 @@ export function DocumentRequestForm({
     setMessage("");
     startTransition(async () => {
       try {
-        await postJson("/api/groupware/document-requests", {
-          category,
-          title,
-          body,
-          amount: amount ? Number(amount) : null,
-          reviewerId
-        });
+        const formData = new FormData();
+        formData.set("category", category);
+        formData.set("title", title);
+        formData.set("body", body);
+        formData.set("amount", amount);
+        formData.set("reviewerId", reviewerId);
+        formData.set("vendor", vendor);
+        formData.set("dueDate", dueDate);
+        formData.set("budgetCode", budgetCode);
+        files.forEach((file) => formData.append("attachments", file));
+        await postForm("/api/groupware/document-requests", formData);
         setTitle("");
         setBody("");
         setAmount("");
+        setVendor("");
+        setDueDate("");
+        setBudgetCode("");
+        setFiles([]);
         setMessage("전자결재를 상신했습니다.");
         router.refresh();
       } catch (error) {
@@ -433,14 +544,37 @@ export function DocumentRequestForm({
         <label htmlFor="document-title">제목</label>
         <input id="document-title" value={title} onChange={(event) => setTitle(event.target.value)} />
       </div>
+      <div className="grid-3">
+        <div className="field">
+          <label htmlFor="document-vendor">거래처/대상</label>
+          <input id="document-vendor" value={vendor} onChange={(event) => setVendor(event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="document-due-date">희망일</label>
+          <input id="document-due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="document-budget-code">예산/계정</label>
+          <input id="document-budget-code" value={budgetCode} onChange={(event) => setBudgetCode(event.target.value)} />
+        </div>
+      </div>
       <div className="field">
         <label htmlFor="document-body">내용</label>
         <textarea id="document-body" rows={4} value={body} onChange={(event) => setBody(event.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="document-attachments">첨부파일</label>
+        <input id="document-attachments" type="file" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
       </div>
       <div className="actions-row">
         <button className="button" type="button" disabled={isPending || !title.trim() || !body.trim()} onClick={submit}>
           상신
         </button>
+        {files.length > 0 ? (
+          <span className="muted">
+            <Paperclip size={14} /> {files.length}개
+          </span>
+        ) : null}
         {message ? <span className="muted">{message}</span> : null}
       </div>
     </div>
@@ -477,6 +611,129 @@ export function DocumentReviewButtons({ documentId }: { documentId: string }) {
         반려
       </button>
       {message ? <span className="muted">{message}</span> : null}
+    </div>
+  );
+}
+
+export function DocumentLibraryForm({
+  items,
+  teams
+}: {
+  items: Array<{ id: string; title: string }>;
+  teams: Array<{ id: string; name: string }>;
+}) {
+  const router = useRouter();
+  const [itemId, setItemId] = useState("");
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("POLICY");
+  const [accessScope, setAccessScope] = useState("ALL");
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
+  const [description, setDescription] = useState("");
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    setMessage("");
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("itemId", itemId);
+        formData.set("title", title);
+        formData.set("category", category);
+        formData.set("accessScope", accessScope);
+        formData.set("teamId", accessScope === "TEAM" ? teamId : "");
+        formData.set("description", description);
+        formData.set("note", note);
+        if (file) {
+          formData.set("file", file);
+        }
+        await postForm("/api/groupware/library", formData);
+        setTitle("");
+        setDescription("");
+        setNote("");
+        setFile(null);
+        setMessage("자료를 등록했습니다.");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "자료 등록에 실패했습니다.");
+      }
+    });
+  }
+
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      {items.length > 0 ? (
+        <div className="field">
+          <label htmlFor="library-item">새 버전 대상</label>
+          <select id="library-item" value={itemId} onChange={(event) => setItemId(event.target.value)}>
+            <option value="">새 문서</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      <div className="grid-3">
+        <div className="field">
+          <label htmlFor="library-title">자료명</label>
+          <input id="library-title" value={title} disabled={Boolean(itemId)} onChange={(event) => setTitle(event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="library-category">분류</label>
+          <select id="library-category" value={category} disabled={Boolean(itemId)} onChange={(event) => setCategory(event.target.value)}>
+            <option value="POLICY">회사 규정</option>
+            <option value="CONTRACT">계약서 양식</option>
+            <option value="LEAVE">휴가 정책</option>
+            <option value="PAYROLL">급여 안내</option>
+            <option value="FORM">서식</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="library-access">권한</label>
+          <select id="library-access" value={accessScope} disabled={Boolean(itemId)} onChange={(event) => setAccessScope(event.target.value)}>
+            <option value="ALL">전체</option>
+            <option value="TEAM">부서</option>
+            <option value="HR">HR/관리자</option>
+          </select>
+        </div>
+      </div>
+      {accessScope === "TEAM" && !itemId ? (
+        <div className="field">
+          <label htmlFor="library-team">공개 부서</label>
+          <select id="library-team" value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      <div className="grid-2">
+        <div className="field">
+          <label htmlFor="library-description">설명</label>
+          <input id="library-description" value={description} disabled={Boolean(itemId)} onChange={(event) => setDescription(event.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="library-note">버전 메모</label>
+          <input id="library-note" value={note} onChange={(event) => setNote(event.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="library-file">파일</label>
+        <input id="library-file" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+      </div>
+      <div className="actions-row">
+        <button className="button" type="button" disabled={isPending || !file || (!itemId && !title.trim())} onClick={submit}>
+          <Upload size={15} />
+          등록
+        </button>
+        {message ? <span className="muted">{message}</span> : null}
+      </div>
     </div>
   );
 }

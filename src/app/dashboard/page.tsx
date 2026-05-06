@@ -587,6 +587,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const orgTeamId = firstValue(query.orgTeamId) ?? "";
   const orgStatus = firstValue(query.orgStatus) ?? "";
   const orgSearch = firstValue(query.orgSearch) ?? "";
+  const groupwareSearch = firstValue(query.groupwareSearch) ?? "";
   const rawWorkboxFilter = firstValue(query.workboxFilter) ?? "";
   const workThreadId = firstValue(query.workThreadId) ?? "";
   const rawRiskStatus = firstValue(query.riskStatus) ?? "";
@@ -615,7 +616,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     filter: rawWorkboxFilter,
     threadId: workThreadId
   });
-  const groupwareData = await getGroupwareDashboard(user);
+  const groupwareData = await getGroupwareDashboard(user, {
+    search: groupwareSearch
+  });
   const currentPolicy = await getCurrentWorkPolicy(user.companyId);
   const snapshot = await getAttendanceSnapshot(user.id);
   const employeeScheduleBoard = await getEmployeeScheduleBoard(user.id);
@@ -922,6 +925,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 unreadCount={notificationCenter.unreadCount}
                 notifications={notificationCenter.notifications}
                 reminders={notificationCenter.reminders}
+                groupwareSummary={notificationCenter.groupwareSummary}
                 preference={notificationCenter.preference}
                 initialGroup={notificationGroup}
                 initialShowUnreadOnly={notificationUnreadOnly}

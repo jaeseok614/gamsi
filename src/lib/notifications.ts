@@ -1,9 +1,12 @@
 import {
+  AnnouncementAudience,
   ApprovalStatus,
   ApprovalType,
+  DocumentRequestStatus,
   NotificationType,
   Prisma,
   RiskType,
+  WorkThreadTargetType,
   type User
 } from "@/generated/prisma";
 
@@ -14,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { getCompanyRiskEscalationCandidates } from "@/lib/risks";
 import { dateOnly, getKstDateString, kstDayBounds, kstMonthBounds } from "@/lib/time";
 
-type Actor = Pick<User, "id" | "companyId" | "role">;
+type Actor = Pick<User, "id" | "companyId" | "role" | "teamId">;
 
 type NotificationCategory = "APPROVAL" | "LEAVE" | "MISSING" | "MONTH_CLOSE" | "OTHER";
 
@@ -981,6 +984,77 @@ export async function getNotificationCenter(actor: Actor) {
     const snoozeUntil = categorySnoozeUntil(preference, reminder.category);
     return !categoryMuted(preference, reminder.category) && !(snoozeUntil && snoozeUntil.getTime() > Date.now());
   });
+  const [unreadAnnouncements, incomingDocuments, myPendingDocuments, myApprovedDocuments, myRejectedDocuments, assignedMemos, payrollStatementIssues] =
+    await Promise.all([
+      prisma.announcement.count({
+        where: {
+          companyId: actor.companyId,
+          OR: [
+            { audience: AnnouncementAudience.ALL },
+            actor.teamId
+              ? {
+                  audience: AnnouncementAudience.TEAM,
+                  teamId: actor.teamId
+                }
+              : { id: "__none__" }
+          ],
+          AND: [
+            {
+              OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }]
+            },
+            {
+              reads: {
+                none: {
+                  userId: actor.id
+                }
+              }
+            }
+          ]
+        }
+      }),
+      prisma.documentRequest.count({
+        where: {
+          companyId: actor.companyId,
+          reviewerId: actor.id,
+          status: DocumentRequestStatus.PENDING
+        }
+      }),
+      prisma.documentRequest.count({
+        where: {
+          companyId: actor.companyId,
+          requesterId: actor.id,
+          status: DocumentRequestStatus.PENDING
+        }
+      }),
+      prisma.documentRequest.count({
+        where: {
+          companyId: actor.companyId,
+          requesterId: actor.id,
+          status: DocumentRequestStatus.APPROVED
+        }
+      }),
+      prisma.documentRequest.count({
+        where: {
+          companyId: actor.companyId,
+          requesterId: actor.id,
+          status: DocumentRequestStatus.REJECTED
+        }
+      }),
+      prisma.workThread.count({
+        where: {
+          companyId: actor.companyId,
+          targetType: WorkThreadTargetType.USER_PROFILE,
+          assigneeId: actor.id,
+          status: "OPEN"
+        }
+      }),
+      prisma.payrollStatementIssue.count({
+        where: {
+          companyId: actor.companyId,
+          userId: actor.id
+        }
+      })
+    ]);
 
   return {
     notifications: activeNotifications,
@@ -988,6 +1062,15 @@ export async function getNotificationCenter(actor: Actor) {
     archivedCount: archiveSnapshot.count,
     unreadCount,
     reminders: visibleReminders,
+    groupwareSummary: {
+      unreadAnnouncements,
+      incomingDocuments,
+      myPendingDocuments,
+      myApprovedDocuments,
+      myRejectedDocuments,
+      assignedMemos,
+      payrollStatementIssues
+    },
     preference
   };
 }

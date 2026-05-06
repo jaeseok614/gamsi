@@ -12,6 +12,7 @@ import {
   Home,
   LogOut,
   Mail,
+  MessageSquarePlus,
   Play,
   QrCode,
   RefreshCw,
@@ -152,6 +153,16 @@ type NotificationReminder = {
   actionUrl?: string | null;
   tone: "info" | "warning";
   category?: "APPROVAL" | "LEAVE" | "MISSING" | "MONTH_CLOSE";
+};
+
+type NotificationGroupwareSummary = {
+  unreadAnnouncements: number;
+  incomingDocuments: number;
+  myPendingDocuments: number;
+  myApprovedDocuments: number;
+  myRejectedDocuments: number;
+  assignedMemos: number;
+  payrollStatementIssues: number;
 };
 
 type NotificationGroup = "ALL" | "APPROVAL" | "LEAVE" | "MISSING" | "MONTH_CLOSE" | "OTHER";
@@ -3187,6 +3198,7 @@ export function NotificationCenter({
   unreadCount,
   notifications,
   reminders,
+  groupwareSummary,
   preference,
   initialGroup = "ALL",
   initialShowUnreadOnly = false,
@@ -3196,6 +3208,7 @@ export function NotificationCenter({
   unreadCount: number;
   notifications: NotificationCenterItem[];
   reminders: NotificationReminder[];
+  groupwareSummary?: NotificationGroupwareSummary;
   preference: NotificationPreferenceState;
   initialGroup?: NotificationGroup;
   initialShowUnreadOnly?: boolean;
@@ -3456,6 +3469,46 @@ export function NotificationCenter({
           </button>
         </div>
       </div>
+
+      {groupwareSummary ? (
+        <div className="grid-4">
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-announcements">
+            <Bell size={18} />
+            <strong>미확인 공지</strong>
+            <span className="muted">{groupwareSummary.unreadAnnouncements}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+            <FileText size={18} />
+            <strong>받은 결재</strong>
+            <span className="muted">{groupwareSummary.incomingDocuments}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=workbox">
+            <MessageSquarePlus size={18} />
+            <strong>담당 메모</strong>
+            <span className="muted">{groupwareSummary.assignedMemos}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-payroll-statements">
+            <Download size={18} />
+            <strong>급여명세</strong>
+            <span className="muted">{groupwareSummary.payrollStatementIssues}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+            <FileText size={18} />
+            <strong>내 상신 대기</strong>
+            <span className="muted">{groupwareSummary.myPendingDocuments}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+            <ThumbsUp size={18} />
+            <strong>승인 완료</strong>
+            <span className="muted">{groupwareSummary.myApprovedDocuments}건</span>
+          </a>
+          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+            <ThumbsDown size={18} />
+            <strong>반려</strong>
+            <span className="muted">{groupwareSummary.myRejectedDocuments}건</span>
+          </a>
+        </div>
+      ) : null}
 
       <div className="stack" style={{ gap: 10 }}>
         <div className="actions-row" style={{ flexWrap: "wrap" }}>

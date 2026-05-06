@@ -48,6 +48,18 @@ async function requestJson(request, cookie, path, method = "GET", body) {
   return response.json();
 }
 
+async function requestMultipart(request, cookie, path, multipart) {
+  const response = await request.fetch(path, {
+    method: "POST",
+    headers: {
+      cookie
+    },
+    multipart
+  });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
 async function addSessionCookie(page, cookie, baseURL) {
   await page.context().addCookies([
     {
@@ -66,6 +78,7 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   const adminCookie = await loginApi(request, "admin@gamsi.kr");
   const employeeCookie = await loginApi(request, "employee@gamsi.kr");
   const hrCookie = await loginApi(request, "hr@gamsi.kr");
+  const managerCookie = await loginApi(request, "manager@gamsi.kr");
   const employee = await prisma.user.findUniqueOrThrow({
     where: {
       email: "employee@gamsi.kr"
@@ -74,6 +87,11 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   const hr = await prisma.user.findUniqueOrThrow({
     where: {
       email: "hr@gamsi.kr"
+    }
+  });
+  const manager = await prisma.user.findUniqueOrThrow({
+    where: {
+      email: "manager@gamsi.kr"
     }
   });
   await prisma.payrollStatementIssue.deleteMany({
@@ -96,13 +114,24 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
 
   const stamp = Date.now();
   const announcementTitle = `Playwright 그룹웨어 공지 ${stamp}`;
-  const announcement = await requestJson(request, adminCookie, "/api/groupware/announcements", "POST", {
+  const announcement = await requestMultipart(request, adminCookie, "/api/groupware/announcements", {
     title: announcementTitle,
     body: "전체 대상 읽음 확인 공지",
     audience: "ALL",
-    isPinned: true
+    category: "HR",
+    isPinned: "true",
+    allowComments: "true",
+    attachments: {
+      name: "notice.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("공지 첨부")
+    }
   });
+  expect(announcement.attachmentCount).toBe(1);
   await requestJson(request, employeeCookie, `/api/groupware/announcements/${announcement.id}/read`, "POST", {});
+  await requestJson(request, employeeCookie, `/api/groupware/announcements/${announcement.id}/comments`, "POST", {
+    body: "Playwright 공지 댓글"
+  });
   const announcementRead = await prisma.announcementRead.findUnique({
     where: {
       announcementId_userId: {
@@ -123,8 +152,24 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
     }
   });
   expect(employeeAnnouncementNotification).toBeTruthy();
+  const announcementAttachment = await prisma.announcementAttachment.findFirstOrThrow({
+    where: {
+      announcementId: announcement.id
+    }
+  });
+  const announcementAttachmentDownload = await request.get(`${baseURL}/api/groupware/announcement-attachments/${announcementAttachment.id}`, {
+    headers: {
+      cookie: employeeCookie
+    }
+  });
+  expect(announcementAttachmentDownload.ok()).toBeTruthy();
+  expect(await announcementAttachmentDownload.text()).toContain("공지 첨부");
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText(announcementTitle)).toBeVisible();
+  await expect(page.getByText("Playwright 공지 댓글").first()).toBeVisible();
+  await page.goto(`/dashboard?view=groupware&groupwareSearch=${encodeURIComponent(announcementTitle)}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText(announcementTitle).first()).toBeVisible();
+  await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
 
   const memoText = `Playwright 그룹웨어 메모 ${Date.now()}`;
   await page.getByLabel("프로필 메모").fill(memoText);
@@ -218,13 +263,33 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   expect(await employeeCsv.text()).toContain("급여명세 기초자료");
 
   const documentTitle = `Playwright 지출결의 ${stamp}`;
-  const document = await requestJson(request, employeeCookie, "/api/groupware/document-requests", "POST", {
+  const document = await requestMultipart(request, employeeCookie, "/api/groupware/document-requests", {
     title: documentTitle,
     body: "장비 구매 비용 승인 요청",
     category: "EXPENSE",
-    amount: 77000,
-    reviewerId: hr.id
+    amount: "77000",
+    reviewerId: hr.id,
+    vendor: "Playwright 공급사",
+    dueDate: "2026-05-15",
+    budgetCode: "QA-77",
+    attachments: {
+      name: "expense.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("전자결재 첨부")
+    }
   });
+  expect(document.documentNumber).toContain("DOC-");
+  expect(document.attachmentCount).toBe(1);
+  const steps = await prisma.documentApprovalStep.findMany({
+    where: {
+      documentRequestId: document.id
+    },
+    orderBy: {
+      stepOrder: "asc"
+    }
+  });
+  expect(steps.map((step) => step.approverId)).toContain(manager.id);
+  expect(steps.map((step) => step.approverId)).toContain(hr.id);
   const documentThread = await prisma.workThread.findUnique({
     where: {
       companyId_targetType_targetId: {
@@ -237,7 +302,7 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   expect(documentThread?.status).toBe("OPEN");
   const reviewerNotification = await prisma.notification.findFirst({
     where: {
-      userId: hr.id,
+      userId: manager.id,
       type: "DOCUMENT_REQUEST",
       metadata: {
         path: ["documentRequestId"],
@@ -246,11 +311,40 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
     }
   });
   expect(reviewerNotification).toBeTruthy();
-  const reviewedDocument = await requestJson(request, hrCookie, `/api/groupware/document-requests/${document.id}/review`, "POST", {
+  const managerReviewedDocument = await requestJson(request, managerCookie, `/api/groupware/document-requests/${document.id}/review`, "POST", {
     status: "APPROVED",
-    reviewNote: "Playwright 전자결재 승인"
+    reviewNote: "Playwright 팀장 승인"
+  });
+  expect(managerReviewedDocument.status).toBe("PENDING");
+  const hrReviewedDocument = await requestJson(request, hrCookie, `/api/groupware/document-requests/${document.id}/review`, "POST", {
+    status: "APPROVED",
+    reviewNote: "Playwright HR 승인"
+  });
+  expect(hrReviewedDocument.status).toBe("PENDING");
+  const reviewedDocument = await requestJson(request, adminCookie, `/api/groupware/document-requests/${document.id}/review`, "POST", {
+    status: "APPROVED",
+    reviewNote: "Playwright 관리자 승인"
   });
   expect(reviewedDocument.status).toBe("APPROVED");
+  const documentAttachment = await prisma.documentAttachment.findFirstOrThrow({
+    where: {
+      documentRequestId: document.id
+    }
+  });
+  const documentAttachmentDownload = await request.get(`${baseURL}/api/groupware/document-attachments/${documentAttachment.id}`, {
+    headers: {
+      cookie: employeeCookie
+    }
+  });
+  expect(documentAttachmentDownload.ok()).toBeTruthy();
+  expect(await documentAttachmentDownload.text()).toContain("전자결재 첨부");
+  const documentPdf = await request.get(`${baseURL}/api/groupware/document-requests/${document.id}/pdf`, {
+    headers: {
+      cookie: employeeCookie
+    }
+  });
+  expect(documentPdf.ok()).toBeTruthy();
+  expect(documentPdf.headers()["content-type"]).toContain("application/pdf");
   const resolvedDocumentThread = await prisma.workThread.findUnique({
     where: {
       companyId_targetType_targetId: {
@@ -275,4 +369,39 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
     }
   });
   expect(requesterNotification?.title).toContain("승인");
+
+  const library = await requestMultipart(request, adminCookie, "/api/groupware/library", {
+    title: `Playwright 회사 규정 ${stamp}`,
+    category: "POLICY",
+    accessScope: "ALL",
+    description: "Playwright 자료실 등록",
+    note: "초판",
+    file: {
+      name: "policy.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("자료실 v1")
+    }
+  });
+  expect(library.version.versionNo).toBe(1);
+  const libraryV2 = await requestMultipart(request, adminCookie, "/api/groupware/library", {
+    itemId: library.item.id,
+    note: "개정",
+    file: {
+      name: "policy-v2.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("자료실 v2")
+    }
+  });
+  expect(libraryV2.version.versionNo).toBe(2);
+  const libraryDownload = await request.get(`${baseURL}/api/groupware/library/versions/${libraryV2.version.id}`, {
+    headers: {
+      cookie: employeeCookie
+    }
+  });
+  expect(libraryDownload.ok()).toBeTruthy();
+  expect(await libraryDownload.text()).toContain("자료실 v2");
+
+  const notificationCenter = await requestJson(request, employeeCookie, "/api/notifications");
+  expect(notificationCenter.groupwareSummary.payrollStatementIssues).toBeGreaterThanOrEqual(1);
+  expect(notificationCenter.groupwareSummary.myApprovedDocuments).toBeGreaterThanOrEqual(1);
 });
