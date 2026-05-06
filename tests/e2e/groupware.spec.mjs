@@ -70,12 +70,7 @@ async function addSessionCookie(page, cookie, baseURL) {
   ]);
 }
 
-test.afterAll(async () => {
-  await prisma.$disconnect();
-});
-
-test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재가 동작한다", async ({ page, request, baseURL }) => {
-  test.setTimeout(180_000);
+async function groupwareActors(request) {
   const adminCookie = await loginApi(request, "admin@gamsi.kr");
   const employeeCookie = await loginApi(request, "employee@gamsi.kr");
   const hrCookie = await loginApi(request, "hr@gamsi.kr");
@@ -95,13 +90,51 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
       email: "manager@gamsi.kr"
     }
   });
-  await prisma.payrollStatementIssue.deleteMany({
-    where: {
-      companyId: employee.companyId,
-      userId: employee.id,
-      month: kstMonth()
+
+  return {
+    adminCookie,
+    employeeCookie,
+    hrCookie,
+    managerCookie,
+    employee,
+    hr,
+    manager
+  };
+}
+
+async function expectAttachmentDownloadAudit(companyId, targetType, targetId) {
+  await expect
+    .poll(() =>
+      prisma.auditLog.count({
+        where: {
+          companyId,
+          action: "attachment.downloaded",
+          targetType,
+          targetId
+        }
+      })
+    )
+    .toBeGreaterThanOrEqual(1);
+}
+
+function watchReactKeyWarnings(page) {
+  const warnings = [];
+  page.on("console", (message) => {
+    const text = message.text();
+    if (text.includes("Encountered two children with the same key")) {
+      warnings.push(text);
     }
   });
+  return () => expect(warnings).toEqual([]);
+}
+
+test.afterAll(async () => {
+  await prisma.$disconnect();
+});
+
+test("그룹웨어 공지 댓글 첨부 검색이 동작한다", async ({ page, request, baseURL }) => {
+  const { adminCookie, employeeCookie, employee } = await groupwareActors(request);
+  const expectNoReactKeyWarnings = watchReactKeyWarnings(page);
   await addSessionCookie(page, adminCookie, baseURL);
 
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
@@ -165,23 +198,27 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(announcementAttachmentDownload.ok()).toBeTruthy();
   expect(await announcementAttachmentDownload.text()).toContain("공지 첨부");
-  await expect
-    .poll(() =>
-      prisma.auditLog.count({
-        where: {
-          companyId: employee.companyId,
-          action: "attachment.downloaded",
-          targetType: "announcement_attachment",
-          targetId: announcementAttachment.id
-        }
-      })
-    )
-    .toBeGreaterThanOrEqual(1);
+  await expectAttachmentDownloadAudit(employee.companyId, "announcement_attachment", announcementAttachment.id);
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText(announcementTitle)).toBeVisible();
   await expect(page.getByText("Playwright 공지 댓글").first()).toBeVisible();
   await page.goto(`/dashboard?view=groupware&groupwareSearch=${encodeURIComponent(announcementTitle)}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText(announcementTitle).first()).toBeVisible();
+  await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
+  expectNoReactKeyWarnings();
+});
+
+test("그룹웨어 메모 실적 급여명세가 동작한다", async ({ page, request, baseURL }) => {
+  const { adminCookie, employeeCookie, hrCookie, employee, hr, manager } = await groupwareActors(request);
+  const stamp = Date.now();
+  await prisma.payrollStatementIssue.deleteMany({
+    where: {
+      companyId: employee.companyId,
+      userId: employee.id,
+      month: kstMonth()
+    }
+  });
+  await addSessionCookie(page, adminCookie, baseURL);
   await page.goto(`/dashboard?view=groupware&orgUserId=${employee.id}`, { waitUntil: "domcontentloaded" });
 
   const memoText = `Playwright 그룹웨어 메모 ${Date.now()}`;
@@ -279,6 +316,14 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   expect(employeeCsv.ok()).toBeTruthy();
   expect(await employeeCsv.text()).toContain("급여명세 기초자료");
 
+  const notificationCenter = await requestJson(request, employeeCookie, "/api/notifications");
+  expect(notificationCenter.groupwareSummary.payrollStatementIssues).toBeGreaterThanOrEqual(1);
+});
+
+test("그룹웨어 전자결재 PDF 첨부 자료실이 동작한다", async ({ request, baseURL }) => {
+  test.setTimeout(120_000);
+  const { adminCookie, employeeCookie, hrCookie, managerCookie, employee, hr, manager } = await groupwareActors(request);
+  const stamp = Date.now();
   const documentTitle = `Playwright 지출결의 ${stamp}`;
   const document = await requestMultipart(request, employeeCookie, "/api/groupware/document-requests", {
     title: documentTitle,
@@ -355,18 +400,7 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(documentAttachmentDownload.ok()).toBeTruthy();
   expect(await documentAttachmentDownload.text()).toContain("전자결재 첨부");
-  await expect
-    .poll(() =>
-      prisma.auditLog.count({
-        where: {
-          companyId: employee.companyId,
-          action: "attachment.downloaded",
-          targetType: "document_attachment",
-          targetId: documentAttachment.id
-        }
-      })
-    )
-    .toBeGreaterThanOrEqual(1);
+  await expectAttachmentDownloadAudit(employee.companyId, "document_attachment", documentAttachment.id);
   const documentPdf = await request.get(`${baseURL}/api/groupware/document-requests/${document.id}/pdf`, {
     headers: {
       cookie: employeeCookie
@@ -429,20 +463,8 @@ test("그룹웨어 연락처, 공지, 메모, 실적, 급여명세, 전자결재
   });
   expect(libraryDownload.ok()).toBeTruthy();
   expect(await libraryDownload.text()).toContain("자료실 v2");
-  await expect
-    .poll(() =>
-      prisma.auditLog.count({
-        where: {
-          companyId: employee.companyId,
-          action: "attachment.downloaded",
-          targetType: "document_library_version",
-          targetId: libraryV2.version.id
-        }
-      })
-    )
-    .toBeGreaterThanOrEqual(1);
+  await expectAttachmentDownloadAudit(employee.companyId, "document_library_version", libraryV2.version.id);
 
   const notificationCenter = await requestJson(request, employeeCookie, "/api/notifications");
-  expect(notificationCenter.groupwareSummary.payrollStatementIssues).toBeGreaterThanOrEqual(1);
   expect(notificationCenter.groupwareSummary.myApprovedDocuments).toBeGreaterThanOrEqual(1);
 });

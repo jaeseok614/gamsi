@@ -29,13 +29,11 @@ type GroupwareSearchResult = {
 };
 
 function addMonths(monthString: string, offset: number) {
-  const date = new Date(`${monthString}-01T00:00:00+09:00`);
-  date.setUTCMonth(date.getUTCMonth() + offset);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit"
-  }).format(date);
+  const [year, month] = monthString.split("-").map(Number);
+  const monthIndex = year * 12 + (month - 1) + offset;
+  const targetYear = Math.floor(monthIndex / 12);
+  const targetMonth = (monthIndex % 12 + 12) % 12 + 1;
+  return `${String(targetYear).padStart(4, "0")}-${String(targetMonth).padStart(2, "0")}`;
 }
 
 export async function canCreateProfileMemo(actor: Actor, targetUserId: string) {

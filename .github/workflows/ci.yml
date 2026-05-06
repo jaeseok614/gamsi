@@ -38,6 +38,8 @@ jobs:
       SMTP_FROM: "WorkGuard CI <no-reply@example.com>"
       WEB_PUSH_SUBJECT: mailto:ci@example.com
       PLAYWRIGHT_BASE_URL: http://localhost:3000
+      PLAYWRIGHT_WEB_SERVER: "true"
+      PLAYWRIGHT_WORKERS: "2"
       QA_BASE_URL: http://localhost:3000
 
     steps:
@@ -76,6 +78,7 @@ jobs:
       - name: Start app
         run: |
           npm run start > /tmp/workguard-next.log 2>&1 &
+          echo $! > /tmp/workguard-next.pid
           for i in {1..60}; do
             if curl -fsS http://localhost:3000/api/health >/dev/null; then
               exit 0
@@ -87,6 +90,24 @@ jobs:
 
       - name: Smoke QA
         run: npm run qa:smoke
+
+      - name: Stop smoke app
+        if: always()
+        run: |
+          if [ -f /tmp/workguard-next.pid ]; then
+            kill "$(cat /tmp/workguard-next.pid)" || true
+          fi
+          for i in {1..20}; do
+            if ! curl -fsS http://localhost:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/workguard-next.log
+          exit 1
+
+      - name: Reset E2E database
+        run: npm run qa:e2e:prepare
 
       - name: Playwright E2E
         run: npm run qa:e2e

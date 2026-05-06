@@ -200,19 +200,22 @@ function signedS3Request(input: {
   const credentialScope = `${dateStamp}/${input.config.region}/s3/aws4_request`;
   const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256Hex(canonicalRequest)].join("\n");
   const signature = hmacSha256Hex(signingKey(input.config, dateStamp), stringToSign);
+  const headers: Record<string, string> = {
+    authorization: [
+      `AWS4-HMAC-SHA256 Credential=${input.config.accessKeyId}/${credentialScope}`,
+      `SignedHeaders=${signedHeaders}`,
+      `Signature=${signature}`
+    ].join(","),
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate
+  };
+  if (input.method === "PUT" && input.content) {
+    headers["content-length"] = String(input.content.byteLength);
+  }
 
   return {
     url,
-    headers: {
-      authorization: [
-        "AWS4-HMAC-SHA256",
-        `Credential=${input.config.accessKeyId}/${credentialScope}`,
-        `SignedHeaders=${signedHeaders}`,
-        `Signature=${signature}`
-      ].join(", "),
-      "x-amz-content-sha256": payloadHash,
-      "x-amz-date": amzDate
-    }
+    headers
   };
 }
 
