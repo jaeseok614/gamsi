@@ -544,10 +544,10 @@ test("리스크 재계산이 미승인 초과근로, 포괄임금, 휴게, 스�
   expect(types.has("NIGHT_HOLIDAY_WORK")).toBeTruthy();
 });
 
-test("승인된 전일 휴가는 스케줄 누락 리스크를 만들지 않고 8시간 휴게 부족은 잡아낸다", async ({ request }) => {
+test("승인된 전일 휴가는 스케줄 누락 리스크를 만들지 않고 4시간 이상 휴게 부족은 잡아낸다", async ({ request }) => {
   const { company, user: riskUser } = await createIsolatedCompanyUser("ADMIN", "risk-edge");
   const adminCookie = await loginApi(request, riskUser.email);
-  const [leaveDate, breakDate] = recentWeekdayDates(2);
+  const [leaveDate, breakDate, shortBreakDate] = recentWeekdayDates(3);
 
   await prisma.approvalRequest.create({
     data: {
@@ -582,6 +582,15 @@ test("승인된 전일 휴가는 스케줄 누락 리스크를 만들지 않고 
         scheduledStartAt: kstDateTime(breakDate, 9, 0),
         scheduledEndAt: kstDateTime(breakDate, 17, 0),
         breakMinutes: 60
+      },
+      {
+        companyId: company.id,
+        userId: riskUser.id,
+        workDate: dateOnly(shortBreakDate),
+        shiftName: "PW short break edge",
+        scheduledStartAt: kstDateTime(shortBreakDate, 9, 0),
+        scheduledEndAt: kstDateTime(shortBreakDate, 15, 0),
+        breakMinutes: 30
       }
     ]
   });
@@ -597,8 +606,21 @@ test("승인된 전일 휴가는 스케줄 누락 리스크를 만들지 않고 
     overtimeMinutes: 0,
     approvedOvertimeMinutes: 0
   });
+  await createClosedSession({
+    companyId: company.id,
+    userId: riskUser.id,
+    workDate: shortBreakDate,
+    checkInAt: kstDateTime(shortBreakDate, 9, 0),
+    checkOutAt: kstDateTime(shortBreakDate, 15, 0),
+    grossMinutes: 360,
+    breakMinutes: 0,
+    calculatedWorkMinutes: 360,
+    overtimeMinutes: 0,
+    approvedOvertimeMinutes: 0
+  });
 
   await requestJson(request, adminCookie, "/api/risks/recalculate", "POST", {});
+  const monthlyReport = await requestJson(request, adminCookie, `/api/reports/monthly?month=${shortBreakDate.slice(0, 7)}`);
 
   const risks = await prisma.riskSignal.findMany({
     where: {
@@ -618,4 +640,10 @@ test("승인된 전일 휴가는 스케줄 누락 리스크를 만들지 않고 
   expect(riskByTypeAndDate.has(`MISSING_CHECK_IN_OUT:${leaveDate}`)).toBeFalsy();
   expect(riskByTypeAndDate.has(`SCHEDULE_MISMATCH:${leaveDate}`)).toBeFalsy();
   expect(riskByTypeAndDate.has(`BREAK_VIOLATION:${breakDate}`)).toBeTruthy();
+  expect(riskByTypeAndDate.has(`BREAK_VIOLATION:${shortBreakDate}`)).toBeTruthy();
+  expect(
+    monthlyReport.breakRiskRows.some(
+      (row) => row.workDate.startsWith(shortBreakDate) && row.requiredBreakMinutes === 30 && row.breakMinutes === 0
+    )
+  ).toBeTruthy();
 });

@@ -281,6 +281,8 @@ test("핵심 대시보드 흐름이 UI와 API에서 함께 동작한다", async 
   await expect(page.getByText(copiedShiftName)).toBeVisible();
   await safeGoto(page, "/dashboard?view=settings");
   await expect(page.getByRole("heading", { name: "계정 및 운영 설정" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "계정" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "회사" })).toHaveCount(0);
   const adminUiLogin = await page.context().request.post(`${baseURL}/api/auth/login`, {
     data: {
       email: "admin@gamsi.kr",
@@ -289,8 +291,12 @@ test("핵심 대시보드 흐름이 UI와 API에서 함께 동작한다", async 
   });
   expect(adminUiLogin.ok()).toBeTruthy();
   await safeGoto(page, "/dashboard?view=settings");
+  await expect(page.getByRole("link", { name: "회사" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "연동" })).toBeVisible();
+  await safeGoto(page, "/dashboard?view=settings&settingsTab=integrations");
   await expect(page.getByText("연동 상태 체크")).toBeVisible();
   await expect(page.getByText("배포 상태 체크")).toBeVisible();
+  await safeGoto(page, "/dashboard?view=settings&settingsTab=operations");
   await expect(page.getByText("운영 자동화")).toBeVisible();
   await expect(page.getByText("증빙 보안과 감사")).toBeVisible();
   await expect(page.getByText("첫 회사 설정 Wizard")).toBeVisible();
