@@ -186,6 +186,18 @@ function overlapMinutes(startA: Date, endA: Date, startB: Date, endB: Date) {
   return Math.round((end - start) / (60 * 1000));
 }
 
+export function calculateRequiredBreakMinutes(grossMinutes: number, defaultBreakMinutes: number) {
+  if (grossMinutes >= 8 * 60) {
+    return Math.max(60, defaultBreakMinutes);
+  }
+
+  if (grossMinutes >= 4 * 60) {
+    return 30;
+  }
+
+  return 0;
+}
+
 function fullMonthDifference(startDate: string, endDate: string) {
   const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
   const [endYear, endMonth, endDay] = endDate.split("-").map(Number);

@@ -36,7 +36,7 @@ export async function getEvidencePackageData(
   }
 ) {
   if (!canViewReports(actor.role)) {
-    throw new Error("증빙 패키지는 HR 또는 관리자만 생성할 수 있습니다.");
+    throw new Error("증빙 패키지는 인사 담당 또는 관리자만 생성할 수 있습니다.");
   }
 
   const month = /^\d{4}-\d{2}$/.test(input.month) ? input.month : new Date().toISOString().slice(0, 7);
@@ -334,7 +334,7 @@ export async function buildEvidencePackageZip(
   const pdf = await renderEvidencePackagePdf(data);
   const csv = evidencePackageToCsv(data);
   const manifest: string[] = [
-    `WorkGuard evidence package`,
+    `워크가드 증빙 패키지`,
     `company=${data.company.name}`,
     `employee=${data.user.name} <${data.user.email}>`,
     `month=${data.month}`,
@@ -363,7 +363,7 @@ export async function buildEvidencePackageZip(
       } catch (error) {
         manifest.push(
           `missingAttachment=${request.id}/${attachment.originalName}: ${
-            error instanceof Error ? error.message : "read failed"
+            error instanceof Error ? error.message : "파일 읽기 실패"
           }`
         );
       }

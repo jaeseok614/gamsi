@@ -379,9 +379,84 @@ function buildMissingAdjustmentHrefFromMetadata(metadata: unknown) {
   return dashboardViewHref("employee", Object.fromEntries(params.entries()), "missing-adjustment");
 }
 
+function groupwareTabFromActionUrl(actionUrl?: string | null) {
+  if (!actionUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(actionUrl, "https://workguard.local");
+    const tab = url.searchParams.get("groupwareTab");
+    return tab === "board" || tab === "announcements" || tab === "library" ? (tab === "board" ? "announcements" : tab) : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildGroupwareHrefFromNotification(notification: NotificationCenterItem) {
+  const record = getObjectRecord(notification.metadata);
+  if (!record) {
+    return null;
+  }
+
+  const announcementId = typeof record.announcementId === "string" ? record.announcementId : null;
+  if (announcementId) {
+    const metadataCategory = typeof record.category === "string" ? record.category : null;
+    const tab = "announcements";
+    return dashboardViewHref(
+      "groupware",
+      {
+        groupwareTab: tab,
+        groupwareAnnouncementId: announcementId
+      },
+      metadataCategory === "TEAM" ? "groupware-board" : "groupware-announcements"
+    );
+  }
+
+  const libraryItemId =
+    typeof record.libraryItemId === "string"
+      ? record.libraryItemId
+      : typeof record.documentLibraryItemId === "string"
+        ? record.documentLibraryItemId
+        : null;
+  if (libraryItemId) {
+    return dashboardViewHref(
+      "groupware",
+      {
+        groupwareTab: "library",
+        groupwareLibraryItemId: libraryItemId
+      },
+      "groupware-library"
+    );
+  }
+
+  const documentRequestId = typeof record.documentRequestId === "string" ? record.documentRequestId : null;
+  if (documentRequestId) {
+    return dashboardViewHref(
+      "groupware",
+      {
+        groupwareTab: "documents",
+        groupwareDocumentId: documentRequestId
+      },
+      "groupware-documents"
+    );
+  }
+
+  if (notification.type === "PAYROLL_STATEMENT" || typeof record.month === "string") {
+    return dashboardViewHref("groupware", { groupwareTab: "operations" }, "groupware-payroll-statements");
+  }
+
+  return null;
+}
+
 function notificationActionHref(notification: NotificationCenterItem) {
   if (notification.type === "MISSING_RECORD") {
     return buildMissingAdjustmentHrefFromMetadata(notification.metadata) ?? notification.actionUrl ?? dashboardViewHref("employee", undefined, "missing-adjustment");
+  }
+
+  const groupwareHref = buildGroupwareHrefFromNotification(notification);
+  if (groupwareHref) {
+    return groupwareHref;
   }
 
   return notification.actionUrl ?? null;
@@ -390,6 +465,10 @@ function notificationActionHref(notification: NotificationCenterItem) {
 function notificationActionLabel(notification: NotificationCenterItem) {
   if (notification.type === "MISSING_RECORD") {
     return "정정 요청으로 이동";
+  }
+
+  if (buildGroupwareHrefFromNotification(notification)) {
+    return "상세로 이동";
   }
 
   return "바로 가기";
@@ -812,7 +891,7 @@ function sessionDeviceLabel(userAgent?: string | null) {
     return "Windows";
   }
   if (value.includes("linux")) {
-    return "Linux";
+    return "리눅스 기기";
   }
   return "브라우저 세션";
 }
@@ -896,6 +975,11 @@ export function PasswordChangeForm() {
 export function ActiveSessionsPanel({ sessions }: { sessions: AccountSessionItem[] }) {
   const { isPending, message, run } = useActionRefresh();
   const otherSessions = sessions.filter((session) => !session.isCurrent);
+  const visibleSessions = [
+    ...sessions.filter((session) => session.isCurrent),
+    ...otherSessions
+  ].slice(0, 5);
+  const hiddenSessionCount = Math.max(0, sessions.length - visibleSessions.length);
 
   return (
     <div className="stack" style={{ gap: 12 }}>
@@ -916,9 +1000,9 @@ export function ActiveSessionsPanel({ sessions }: { sessions: AccountSessionItem
         </button>
       </div>
 
-      {sessions.length > 0 ? (
+      {visibleSessions.length > 0 ? (
         <div className="stack" style={{ gap: 10 }}>
-          {sessions.map((session) => (
+          {visibleSessions.map((session) => (
             <div className="card" key={session.id} style={{ padding: 16 }}>
               <div className="actions-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
@@ -951,6 +1035,9 @@ export function ActiveSessionsPanel({ sessions }: { sessions: AccountSessionItem
               </div>
             </div>
           ))}
+          {hiddenSessionCount > 0 ? (
+            <div className="empty">이전 세션 {hiddenSessionCount}개는 접어두었습니다. 필요하면 다른 기기 로그아웃으로 정리하세요.</div>
+          ) : null}
         </div>
       ) : (
         <div className="empty">표시할 활성 세션이 없습니다.</div>
@@ -1467,6 +1554,7 @@ export function StatusChangeForm({ options }: { options: StatusOption[] }) {
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState("WORKING");
   const [reason, setReason] = useState("");
+  const statusLabel = options.find((option) => option.value === status)?.label ?? "상태";
 
   function submitStatusChange() {
     setMessage("");
@@ -1481,7 +1569,7 @@ export function StatusChangeForm({ options }: { options: StatusOption[] }) {
           const result = await enqueueFieldQueueItem({
             path: "/api/attendance/status",
             body,
-            label: `상태 변경(${status})`
+            label: `상태 변경(${statusLabel})`
           });
           setMessage(
             result.deduped
@@ -1499,7 +1587,7 @@ export function StatusChangeForm({ options }: { options: StatusOption[] }) {
           const result = await enqueueFieldQueueItem({
             path: "/api/attendance/status",
             body,
-            label: `상태 변경(${status})`
+            label: `상태 변경(${statusLabel})`
           });
           setMessage(
             result.deduped
@@ -3571,12 +3659,12 @@ export function NotificationCenter({
 
       {groupwareSummary ? (
         <div className="grid-4">
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-announcements">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=announcements#groupware-announcements">
             <Bell size={18} />
             <strong>미확인 공지</strong>
             <span className="muted">{groupwareSummary.unreadAnnouncements}건</span>
           </a>
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=documents#groupware-documents">
             <FileText size={18} />
             <strong>받은 결재</strong>
             <span className="muted">{groupwareSummary.incomingDocuments}건</span>
@@ -3586,22 +3674,22 @@ export function NotificationCenter({
             <strong>담당 메모</strong>
             <span className="muted">{groupwareSummary.assignedMemos}건</span>
           </a>
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-payroll-statements">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=operations#groupware-payroll-statements">
             <Download size={18} />
             <strong>급여명세</strong>
             <span className="muted">{groupwareSummary.payrollStatementIssues}건</span>
           </a>
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=documents#groupware-documents">
             <FileText size={18} />
             <strong>내 상신 대기</strong>
             <span className="muted">{groupwareSummary.myPendingDocuments}건</span>
           </a>
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=documents#groupware-documents">
             <ThumbsUp size={18} />
             <strong>승인 완료</strong>
             <span className="muted">{groupwareSummary.myApprovedDocuments}건</span>
           </a>
-          <a className="quick-link-card" href="/dashboard?view=groupware#groupware-documents">
+          <a className="quick-link-card" href="/dashboard?view=groupware&groupwareTab=documents#groupware-documents">
             <ThumbsDown size={18} />
             <strong>반려</strong>
             <span className="muted">{groupwareSummary.myRejectedDocuments}건</span>

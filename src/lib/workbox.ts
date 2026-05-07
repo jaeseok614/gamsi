@@ -11,6 +11,14 @@ import {
 
 import { writeAuditLog } from "@/lib/audit";
 import { canManage, canViewReports } from "@/lib/auth";
+import {
+  approvalStatusLabel,
+  documentCategoryLabel,
+  documentStatusLabel,
+  monthCloseStatusLabel,
+  riskLevelLabel,
+  roleLabel
+} from "@/lib/display-labels";
 import { getManagedUsers } from "@/lib/manager";
 import { createNotifications } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -253,31 +261,20 @@ export async function ensureWorkThreadForApproval(approvalId: string) {
 
   const recipientIds = await managerRecipientIds(approval.companyId, approval.requesterId);
   const title = `${approval.requester.name}님의 ${approvalTypeLabel(approval.type)} 요청`;
-  const existing = await prisma.workThread.findUnique({
+  const thread = await prisma.workThread.upsert({
     where: {
       companyId_targetType_targetId: {
         companyId: approval.companyId,
         targetType: WorkThreadTargetType.APPROVAL_REQUEST,
         targetId: approval.id
       }
-    }
-  });
-
-  if (existing) {
-    return prisma.workThread.update({
-      where: {
-        id: existing.id
-      },
-      data: {
-        title,
-        status: approval.status === "PENDING" ? existing.status : WorkThreadStatus.RESOLVED,
-        priority: approval.type === "ADJUSTMENT" ? WorkThreadPriority.HIGH : existing.priority
-      }
-    });
-  }
-
-  const thread = await prisma.workThread.create({
-    data: {
+    },
+    update: {
+      title,
+      ...(approval.status === "PENDING" ? {} : { status: WorkThreadStatus.RESOLVED }),
+      ...(approval.type === "ADJUSTMENT" ? { priority: WorkThreadPriority.HIGH } : {})
+    },
+    create: {
       companyId: approval.companyId,
       targetType: WorkThreadTargetType.APPROVAL_REQUEST,
       targetId: approval.id,
@@ -288,13 +285,14 @@ export async function ensureWorkThreadForApproval(approvalId: string) {
     }
   });
 
-  await prisma.workThreadReadState.create({
-    data: {
+  await prisma.workThreadReadState.createMany({
+    data: [{
       companyId: approval.companyId,
       threadId: thread.id,
       userId: approval.requesterId,
       lastReadAt: new Date()
-    }
+    }],
+    skipDuplicates: true
   });
 
   return thread;
@@ -314,31 +312,20 @@ export async function ensureWorkThreadForRisk(riskId: string, actorUserId?: stri
     return null;
   }
 
-  const existing = await prisma.workThread.findUnique({
+  return prisma.workThread.upsert({
     where: {
       companyId_targetType_targetId: {
         companyId: risk.companyId,
         targetType: WorkThreadTargetType.RISK_SIGNAL,
         targetId: risk.id
       }
-    }
-  });
-
-  if (existing) {
-    return prisma.workThread.update({
-      where: {
-        id: existing.id
-      },
-      data: {
-        title: risk.title,
-        priority: priorityFromRiskLevel(risk.level),
-        assigneeId: risk.assignedToId ?? existing.assigneeId
-      }
-    });
-  }
-
-  return prisma.workThread.create({
-    data: {
+    },
+    update: {
+      title: risk.title,
+      priority: priorityFromRiskLevel(risk.level),
+      ...(risk.assignedToId ? { assigneeId: risk.assignedToId } : {})
+    },
+    create: {
       companyId: risk.companyId,
       targetType: WorkThreadTargetType.RISK_SIGNAL,
       targetId: risk.id,
@@ -358,36 +345,24 @@ export async function ensureWorkThreadForMonthClose(input: {
 }) {
   const targetId = input.month;
   const title = input.title ?? `${input.month} 월마감 업무`;
-  const existing = await prisma.workThread.findUnique({
+  return prisma.workThread.upsert({
     where: {
       companyId_targetType_targetId: {
         companyId: input.companyId,
         targetType: WorkThreadTargetType.MONTH_CLOSE,
         targetId
       }
-    }
-  });
-
-  if (existing) {
-    return prisma.workThread.update({
-      where: {
-        id: existing.id
-      },
-      data: {
-        title
-      }
-    });
-  }
-
-  const recipients = await managerRecipientIds(input.companyId);
-  return prisma.workThread.create({
-    data: {
+    },
+    update: {
+      title
+    },
+    create: {
       companyId: input.companyId,
       targetType: WorkThreadTargetType.MONTH_CLOSE,
       targetId,
       title,
       priority: WorkThreadPriority.HIGH,
-      assigneeId: recipients[0] ?? null,
+      assigneeId: (await managerRecipientIds(input.companyId))[0] ?? null,
       createdById: input.actorUserId ?? null
     }
   });
@@ -427,35 +402,24 @@ export async function ensureWorkThreadForUserProfile(input: {
       }
     });
     if (!assignee) {
-      throw new Error("담당자는 관리자, HR, 팀장 중에서 선택하세요.");
+      throw new Error("담당자는 관리자, 인사 담당, 팀장 중에서 선택하세요.");
     }
   }
 
   const title = `${targetUser.name}님 프로필 메모`;
-  const existing = await prisma.workThread.findUnique({
+  return prisma.workThread.upsert({
     where: {
       companyId_targetType_targetId: {
         companyId: input.companyId,
         targetType: WorkThreadTargetType.USER_PROFILE,
         targetId: targetUser.id
       }
-    }
-  });
-
-  if (existing) {
-    return prisma.workThread.update({
-      where: {
-        id: existing.id
-      },
-      data: {
-        title,
-        assigneeId: assigneeId ?? existing.assigneeId
-      }
-    });
-  }
-
-  return prisma.workThread.create({
-    data: {
+    },
+    update: {
+      title,
+      ...(assigneeId ? { assigneeId } : {})
+    },
+    create: {
       companyId: input.companyId,
       targetType: WorkThreadTargetType.USER_PROFILE,
       targetId: targetUser.id,
@@ -483,31 +447,20 @@ export async function ensureWorkThreadForDocumentRequest(documentRequestId: stri
   }
 
   const title = `${document.documentNumber ?? "문서번호 미정"} · ${document.requester.name}님의 ${document.category} 결재`;
-  const existing = await prisma.workThread.findUnique({
+  return prisma.workThread.upsert({
     where: {
       companyId_targetType_targetId: {
         companyId: document.companyId,
         targetType: WorkThreadTargetType.DOCUMENT_REQUEST,
         targetId: document.id
       }
-    }
-  });
-
-  if (existing) {
-    return prisma.workThread.update({
-      where: {
-        id: existing.id
-      },
-      data: {
-        title,
-        status: document.status === "PENDING" ? existing.status : WorkThreadStatus.RESOLVED,
-        assigneeId: document.reviewerId ?? existing.assigneeId
-      }
-    });
-  }
-
-  return prisma.workThread.create({
-    data: {
+    },
+    update: {
+      title,
+      ...(document.status === "PENDING" ? {} : { status: WorkThreadStatus.RESOLVED }),
+      ...(document.reviewerId ? { assigneeId: document.reviewerId } : {})
+    },
+    create: {
       companyId: document.companyId,
       targetType: WorkThreadTargetType.DOCUMENT_REQUEST,
       targetId: document.id,
@@ -628,7 +581,7 @@ async function targetSummary(thread: {
     if (!approval) {
       return "승인 요청을 찾을 수 없음";
     }
-    return `${approval.requester.name} · ${approvalTypeLabel(approval.type)} · ${approval.status}`;
+    return `${approval.requester.name} · ${approvalTypeLabel(approval.type)} · ${approvalStatusLabel(approval.status)}`;
   }
 
   if (thread.targetType === WorkThreadTargetType.RISK_SIGNAL) {
@@ -644,7 +597,7 @@ async function targetSummary(thread: {
     if (!risk) {
       return "리스크 신호를 찾을 수 없음";
     }
-    return `${risk.user.name} · ${risk.level} · ${risk.message}`;
+    return `${risk.user.name} · ${riskLevelLabel(risk.level)} · ${risk.message}`;
   }
 
   if (thread.targetType === WorkThreadTargetType.USER_PROFILE) {
@@ -660,7 +613,7 @@ async function targetSummary(thread: {
     if (!user) {
       return "직원 프로필을 찾을 수 없음";
     }
-    return `${user.name} · ${user.team?.name ?? "소속 없음"} · ${user.jobTitle ?? user.role}`;
+    return `${user.name} · ${user.team?.name ?? "소속 없음"} · ${user.jobTitle ?? roleLabel(user.role)}`;
   }
 
   if (thread.targetType === WorkThreadTargetType.DOCUMENT_REQUEST) {
@@ -677,7 +630,7 @@ async function targetSummary(thread: {
     if (!document) {
       return "전자결재 문서를 찾을 수 없음";
     }
-    return `${document.documentNumber ?? "문서번호 미정"} · ${document.requester.name} · ${document.category} · ${document.status}`;
+    return `${document.documentNumber ?? "문서번호 미정"} · ${document.requester.name} · ${documentCategoryLabel(document.category)} · ${documentStatusLabel(document.status)}`;
   }
 
   const monthClose = await prisma.monthClose.findUnique({
@@ -688,7 +641,7 @@ async function targetSummary(thread: {
       }
     }
   });
-  return `${thread.targetId} · ${monthClose?.status ?? "OPEN"}`;
+  return `${thread.targetId} · ${monthCloseStatusLabel(monthClose?.status)}`;
 }
 
 async function decorateThread(actor: Actor, thread: WorkThreadListRow) {
@@ -1170,7 +1123,7 @@ export async function updateWorkThread(actor: Actor, input: {
         }
       });
       if (!assignee) {
-        throw new Error("담당자는 관리자, HR, 팀장 중에서 선택하세요.");
+        throw new Error("담당자는 관리자, 인사 담당, 팀장 중에서 선택하세요.");
       }
     }
   }

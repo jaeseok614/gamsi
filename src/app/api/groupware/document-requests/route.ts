@@ -17,6 +17,7 @@ async function parsePayload(request: NextRequest) {
       category,
       amount: String(formData.get("amount") ?? ""),
       reviewerId: String(formData.get("reviewerId") ?? "") || null,
+      approvalStepUserIds: formData.getAll("approvalStepUserIds").map((value) => String(value)).filter(Boolean),
       formData: {
         category,
         vendor: String(formData.get("vendor") ?? ""),
@@ -33,6 +34,7 @@ async function parsePayload(request: NextRequest) {
     category?: string;
     amount?: number | null;
     reviewerId?: string | null;
+    approvalStepUserIds?: string[];
     formData?: Prisma.JsonObject | null;
   };
   return {
@@ -41,6 +43,7 @@ async function parsePayload(request: NextRequest) {
     category: body.category,
     amount: body.amount === undefined || body.amount === null ? "" : String(body.amount),
     reviewerId: body.reviewerId,
+    approvalStepUserIds: Array.isArray(body.approvalStepUserIds) ? body.approvalStepUserIds : [],
     formData: body.formData ?? null,
     attachments: [] as File[]
   };
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
       category: payload.category,
       amount: payload.amount ? Number(payload.amount) : null,
       reviewerId: payload.reviewerId,
+      approvalStepUserIds: payload.approvalStepUserIds,
       formData: payload.formData
     });
     const attachments = await saveDocumentAttachments({

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { jsonError, requireApiUser } from "@/lib/api";
 import { recordGroupwareAttachmentDownload } from "@/lib/evidence";
 import { getAnnouncementAttachmentForActor } from "@/lib/groupware";
-import { readStoredAttachment } from "@/lib/uploads";
+import { attachmentContentDisposition, canPreviewAttachment, readStoredAttachment } from "@/lib/uploads";
 
 type RouteContext = {
   params: Promise<{
@@ -22,21 +22,24 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const attachment = await getAnnouncementAttachmentForActor(user, params.id);
     const stored = await readStoredAttachment(attachment.storagePath);
-    await recordGroupwareAttachmentDownload({
-      companyId: user.companyId,
-      actorUserId: user.id,
-      targetType: "announcement_attachment",
-      targetId: attachment.id,
-      originalName: attachment.originalName,
-      sourceType: "announcement",
-      sourceId: attachment.announcementId,
-      ownerUserId: attachment.announcement.authorId
-    });
+    const preview = request.nextUrl.searchParams.get("preview") === "1" && canPreviewAttachment(attachment);
+    if (!preview) {
+      await recordGroupwareAttachmentDownload({
+        companyId: user.companyId,
+        actorUserId: user.id,
+        targetType: "announcement_attachment",
+        targetId: attachment.id,
+        originalName: attachment.originalName,
+        sourceType: "announcement",
+        sourceId: attachment.announcementId,
+        ownerUserId: attachment.announcement.authorId
+      });
+    }
     return new NextResponse(stored.content, {
       headers: {
         "content-type": attachment.mimeType,
         "content-length": String(stored.content.byteLength),
-        "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`
+        "content-disposition": attachmentContentDisposition(preview ? "inline" : "attachment", attachment.originalName)
       }
     });
   } catch (error) {

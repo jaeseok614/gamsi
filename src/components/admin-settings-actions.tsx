@@ -1,10 +1,10 @@
 "use client";
 
-import { Building2, CalendarDays, MapPin, MonitorUp, QrCode, RefreshCw, Save, Send, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
+import { Building2, CalendarDays, CheckCircle2, Copy, MapPin, MonitorUp, QrCode, RefreshCw, Save, Send, ShieldCheck, Trash2, UserCog, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { integrationDispatchStatusLabel, integrationDispatchStatusTone, roleLabel } from "@/lib/display-labels";
+import { integrationDispatchStatusLabel, integrationDispatchStatusTone, planTierLabel, roleLabel } from "@/lib/display-labels";
 
 type TeamOption = {
   id: string;
@@ -34,6 +34,42 @@ type EditableUser = {
   phoneNumber: string | null;
   extensionNumber: string | null;
   isActive: boolean;
+};
+
+type PermissionMatrixSummary = {
+  roleRows: Array<{
+    role: string;
+    label: string;
+    capabilities: Array<{
+      key: string;
+      label: string;
+      level: "full" | "limited" | "own" | "none";
+      detail: string;
+    }>;
+  }>;
+  selectedUser: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    teamName: string | null;
+  } | null;
+  resourceChecks: Array<{
+    id: string;
+    type: string;
+    typeLabel: string;
+    title: string;
+    scope: string;
+    canAccess: boolean;
+    reason: string;
+    href: string;
+    updatedAt: string | Date;
+  }>;
+  totals: {
+    total: number;
+    accessible: number;
+    blocked: number;
+  };
 };
 
 async function postJson(path: string, body: Record<string, unknown>) {
@@ -85,6 +121,29 @@ function useAdminAction() {
   }
 
   return { isPending, message, run };
+}
+
+function permissionLevelLabel(level: PermissionMatrixSummary["roleRows"][number]["capabilities"][number]["level"]) {
+  if (level === "full") {
+    return "전체";
+  }
+  if (level === "limited") {
+    return "제한";
+  }
+  if (level === "own") {
+    return "본인";
+  }
+  return "차단";
+}
+
+function permissionLevelTone(level: PermissionMatrixSummary["roleRows"][number]["capabilities"][number]["level"]) {
+  if (level === "full") {
+    return "green";
+  }
+  if (level === "none") {
+    return "red";
+  }
+  return "yellow";
 }
 
 const QR_ALPHANUMERIC = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
@@ -384,10 +443,10 @@ export function CompanyPlanSettingsForm({
         <div className="field">
           <label htmlFor="company-plan-tier">플랜</label>
           <select id="company-plan-tier" value={planTier} onChange={(event) => setPlanTier(event.target.value)}>
-            <option value="TRIAL">Trial</option>
-            <option value="STARTER">Starter</option>
-            <option value="GROWTH">Growth</option>
-            <option value="ENTERPRISE">Enterprise</option>
+            <option value="TRIAL">{planTierLabel("TRIAL")}</option>
+            <option value="STARTER">{planTierLabel("STARTER")}</option>
+            <option value="GROWTH">{planTierLabel("GROWTH")}</option>
+            <option value="ENTERPRISE">{planTierLabel("ENTERPRISE")}</option>
           </select>
         </div>
         <div className="field">
@@ -1375,6 +1434,218 @@ export function UserEditList({
   );
 }
 
+export function PermissionMatrixPanel({
+  summary,
+  users
+}: {
+  summary: PermissionMatrixSummary;
+  users: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    teamName: string | null;
+  }>;
+}) {
+  const router = useRouter();
+
+  function selectUser(userId: string) {
+    const search = new URLSearchParams(window.location.search);
+    search.set("view", "settings");
+    search.set("settingsTab", "operations");
+    search.set("settingsPermissionUserId", userId);
+    router.push(`/dashboard?${search.toString()}#permission-matrix`);
+  }
+
+  return (
+    <div className="stack">
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>역할</th>
+              {summary.roleRows[0]?.capabilities.map((capability) => (
+                <th key={capability.key}>{capability.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {summary.roleRows.map((row) => (
+              <tr key={row.role}>
+                <td>
+                  <strong>{row.label}</strong>
+                </td>
+                {row.capabilities.map((capability) => (
+                  <td key={capability.key}>
+                    <span className={`status-pill ${permissionLevelTone(capability.level)}`}>
+                      {permissionLevelLabel(capability.level)}
+                    </span>
+                    <br />
+                    <span className="muted">{capability.detail}</span>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid-3">
+        <div className="metric">
+          <span>선택 직원</span>
+          <strong>{summary.selectedUser?.name ?? "-"}</strong>
+          <p className="muted" style={{ margin: "6px 0 0" }}>
+            {summary.selectedUser ? `${roleLabel(summary.selectedUser.role)} · ${summary.selectedUser.teamName ?? "소속 없음"}` : "직원을 선택하세요."}
+          </p>
+        </div>
+        <div className="metric">
+          <span>접근 가능</span>
+          <strong>{summary.totals.accessible}건</strong>
+          <p className="muted" style={{ margin: "6px 0 0" }}>
+            최근 리소스 {summary.totals.total}건 기준
+          </p>
+        </div>
+        <div className="metric">
+          <span>차단</span>
+          <strong>{summary.totals.blocked}건</strong>
+          <p className="muted" style={{ margin: "6px 0 0" }}>
+            권한 사고 점검 대상
+          </p>
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="permission-matrix-user">직원으로 보기</label>
+        <select
+          id="permission-matrix-user"
+          value={summary.selectedUser?.id ?? ""}
+          onChange={(event) => selectUser(event.target.value)}
+        >
+          {users.map((user) => (
+            <option key={user.id} value={user.id}>
+              {user.name} · {roleLabel(user.role)} · {user.teamName ?? "소속 없음"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {summary.resourceChecks.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>대상</th>
+                <th>범위</th>
+                <th>결과</th>
+                <th>판정 이유</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.resourceChecks.map((resource) => (
+                <tr key={resource.id}>
+                  <td>
+                    <span className="status-pill gray">{resource.typeLabel}</span>
+                    <br />
+                    <strong>{resource.title}</strong>
+                    <br />
+                    <span className="muted">{new Date(resource.updatedAt).toLocaleString("ko-KR")}</span>
+                  </td>
+                  <td>{resource.scope}</td>
+                  <td>
+                    <span className={`status-pill ${resource.canAccess ? "green" : "red"}`}>
+                      {resource.canAccess ? "보임" : "차단"}
+                    </span>
+                  </td>
+                  <td>{resource.reason}</td>
+                  <td>
+                    <a className="button secondary" href={resource.href}>
+                      화면 열기
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty">권한을 점검할 최근 그룹웨어 자료가 없습니다.</div>
+      )}
+    </div>
+  );
+}
+
+function ClientErrorActions({
+  error
+}: {
+  error: {
+    key: string;
+    pathname: string;
+    apiPath: string | null;
+    message: string;
+    digest: string | null;
+    stack: string | null;
+    count: number;
+    firstSeenAt: string | Date;
+    lastSeenAt: string | Date;
+    status: "open" | "resolved";
+  };
+}) {
+  const { isPending, message, run } = useAdminAction();
+  const detail = [
+    `상태: ${error.status === "resolved" ? "해결됨" : "열림"}`,
+    `화면: ${error.pathname}`,
+    `API: ${error.apiPath ?? "-"}`,
+    `식별자: ${error.digest ?? error.key}`,
+    `발생: ${error.count}회`,
+    `처음: ${new Date(error.firstSeenAt).toLocaleString("ko-KR")}`,
+    `최근: ${new Date(error.lastSeenAt).toLocaleString("ko-KR")}`,
+    `메시지: ${error.message}`,
+    error.stack ? `스택:\n${error.stack}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="actions-row">
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() =>
+            run(async () => {
+              await navigator.clipboard.writeText(detail);
+              return "오류 상세를 복사했습니다.";
+            })
+          }
+        >
+          <Copy size={15} />
+          상세 복사
+        </button>
+        {error.status === "open" ? (
+          <button
+            className="button secondary"
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              run(async () => {
+                await postJson("/api/admin/ops/client-errors/resolve", {
+                  key: error.key
+                });
+                return "오류를 해결됨으로 처리했습니다.";
+              })
+            }
+          >
+            <CheckCircle2 size={15} />
+            해결 처리
+          </button>
+        ) : null}
+      </div>
+      {message ? <span className="muted">{message}</span> : null}
+    </div>
+  );
+}
+
 export function IntegrationSettingsForm({
   settings,
   dispatchLogs,
@@ -1478,12 +1749,22 @@ export function IntegrationSettingsForm({
     };
     clientErrors: Array<{
       id: string;
+      key: string;
       pathname: string;
+      apiPath: string | null;
       message: string;
       digest: string | null;
+      stack: string | null;
       count: number;
+      firstSeenAt: string | Date;
       lastSeenAt: string | Date;
       actor: {
+        name: string;
+        email: string;
+      } | null;
+      status: "open" | "resolved";
+      resolvedAt: string | Date | null;
+      resolvedBy: {
         name: string;
         email: string;
       } | null;
@@ -1594,7 +1875,7 @@ export function IntegrationSettingsForm({
           <span>전송 실패 감시</span>
           <strong>{opsSummary.metrics.recentFailedDispatches}건</strong>
           <p className="muted" style={{ margin: "6px 0 0" }}>
-            실패 구독 {opsSummary.metrics.failingPushSubscriptions}건 · 최근 prune {opsSummary.metrics.recentPrunedSubscriptions}건
+            실패 구독 {opsSummary.metrics.failingPushSubscriptions}건 · 최근 정리 {opsSummary.metrics.recentPrunedSubscriptions}건
           </p>
         </div>
         <div className="metric">
@@ -1766,9 +2047,9 @@ export function IntegrationSettingsForm({
             value={state.erpAdapter}
             onChange={(event) => patch({ erpAdapter: event.target.value as "GENERIC" | "DOUZONE" | "GROUPWARE" })}
           >
-            <option value="GENERIC">Generic CSV</option>
-            <option value="DOUZONE">Douzone</option>
-            <option value="GROUPWARE">Groupware</option>
+            <option value="GENERIC">일반 CSV</option>
+            <option value="DOUZONE">더존</option>
+            <option value="GROUPWARE">그룹웨어</option>
           </select>
         </div>
       </div>
@@ -1933,7 +2214,7 @@ export function IntegrationSettingsForm({
         Slack 요약 알림 사용
       </label>
       <div className="field">
-        <label htmlFor="integration-slack-webhook">Slack Webhook URL</label>
+        <label htmlFor="integration-slack-webhook">Slack 알림 수신 주소</label>
         <input
           id="integration-slack-webhook"
           value={state.slackWebhookUrl}
@@ -2158,33 +2439,98 @@ export function IntegrationSettingsForm({
         <div className="empty">최근 실패한 알림/연동 기록이 없습니다.</div>
       )}
       {deploymentSummary.clientErrors.length > 0 ? (
+        <div className="grid-3">
+          {deploymentSummary.clientErrors.slice(0, 3).map((error) => (
+            <div className="notice-card warning" key={`client-error-summary-${error.id}`}>
+              <div>
+                <span className={`status-pill ${error.status === "resolved" ? "green" : "red"}`}>
+                  {error.status === "resolved" ? "해결됨" : "클라이언트 오류"} {error.count}회
+                </span>
+                <strong style={{ display: "block", marginTop: 8 }}>{error.pathname}</strong>
+                <p className="muted" style={{ margin: "6px 0 0" }}>
+                  {error.message}
+                </p>
+                <p className="muted" style={{ margin: "6px 0 0" }}>
+                  API {error.apiPath ?? "-"} · 최근 {new Date(error.lastSeenAt).toLocaleString("ko-KR")}
+                </p>
+                {error.digest ? (
+                  <p className="muted" style={{ margin: "6px 0 0" }}>
+                    식별자 {error.digest}
+                  </p>
+                ) : null}
+              </div>
+              {error.pathname && error.pathname !== "-" ? (
+                <a className="button secondary" href={error.pathname}>
+                  화면 열기
+                </a>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {deploymentSummary.clientErrors.length > 0 ? (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>최근 클라이언트 오류</th>
+                <th>상태</th>
                 <th>화면</th>
+                <th>API</th>
                 <th>발생</th>
-                <th>담당자</th>
+                <th>사용자</th>
                 <th>메시지</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {deploymentSummary.clientErrors.map((error) => (
                 <tr key={error.id}>
-                  <td>{new Date(error.lastSeenAt).toLocaleString("ko-KR")}</td>
+                  <td>
+                    <span className={`status-pill ${error.status === "resolved" ? "green" : "red"}`}>
+                      {error.status === "resolved" ? "해결됨" : "열림"}
+                    </span>
+                    {error.resolvedAt ? (
+                      <>
+                        <br />
+                        <span className="muted">
+                          {new Date(error.resolvedAt).toLocaleString("ko-KR")}
+                          {error.resolvedBy ? ` · ${error.resolvedBy.name}` : ""}
+                        </span>
+                      </>
+                    ) : null}
+                  </td>
                   <td>
                     {error.pathname}
                     {error.digest ? (
                       <>
                         <br />
-                        <span className="muted">{error.digest}</span>
+                        <span className="muted">오류 식별자: {error.digest}</span>
                       </>
                     ) : null}
                   </td>
-                  <td>{error.count}회</td>
-                  <td>{error.actor?.name ?? "-"}</td>
+                  <td>{error.apiPath ?? "-"}</td>
+                  <td>
+                    {error.count}회
+                    <br />
+                    <span className="muted">
+                      처음 {new Date(error.firstSeenAt).toLocaleString("ko-KR")}
+                      <br />
+                      최근 {new Date(error.lastSeenAt).toLocaleString("ko-KR")}
+                    </span>
+                  </td>
+                  <td>
+                    {error.actor?.name ?? "-"}
+                    {error.actor?.email ? (
+                      <>
+                        <br />
+                        <span className="muted">{error.actor.email}</span>
+                      </>
+                    ) : null}
+                  </td>
                   <td>{error.message}</td>
+                  <td>
+                    <ClientErrorActions error={error} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2299,7 +2645,7 @@ export function AutomationSettingsForm({
       <div className="grid-2">
         <label className="check-row">
           <input type="checkbox" checked={dailyDigestEnabled} onChange={(event) => setDailyDigestEnabled(event.target.checked)} />
-          정기 digest 자동 발송
+          정기 요약 자동 발송
         </label>
         <label className="check-row">
           <input type="checkbox" checked={autoPruneEnabled} onChange={(event) => setAutoPruneEnabled(event.target.checked)} />
@@ -2363,7 +2709,7 @@ export function AutomationSettingsForm({
               };
               const current = result.companies?.[0];
               setRunOutput(
-                `digest sent ${current?.digest?.sent ?? 0}건 · failed ${current?.digest?.failed ?? 0}건 · prune ${current?.prune?.pruned ?? 0}건`
+                `요약 발송 ${current?.digest?.sent ?? 0}건 · 발송 실패 ${current?.digest?.failed ?? 0}건 · 구독 정리 ${current?.prune?.pruned ?? 0}건`
               );
               return "운영 자동화를 즉시 실행했습니다.";
             })
@@ -2374,7 +2720,7 @@ export function AutomationSettingsForm({
         </button>
       </div>
       <p className="muted" style={{ margin: 0 }}>
-        월마감 리마인더와 리스크 SLA 리마인더는 스케줄러에 포함되어 함께 실행됩니다.
+        월마감 리마인더와 리스크 처리기한 리마인더는 스케줄러에 포함되어 함께 실행됩니다.
       </p>
       {runOutput ? <p className="muted">{runOutput}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
@@ -2391,18 +2737,18 @@ export function AutomationSettingsForm({
                 <tr>
                   <th>시각</th>
                   <th>트리거</th>
-                  <th>digest</th>
+                  <th>요약 발송</th>
                   <th>실패 경보</th>
-                  <th>prune</th>
+                  <th>구독 정리</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.recentRuns.map((runRow) => (
                   <tr key={runRow.id}>
                     <td>{new Date(runRow.createdAt).toLocaleString("ko-KR")}</td>
-                    <td>{runRow.trigger === "manual" ? "수동" : "cron"}</td>
+                    <td>{runRow.trigger === "manual" ? "수동" : "예약"}</td>
                     <td>
-                      sent {runRow.digest.sent} · failed {runRow.digest.failed}
+                      발송 {runRow.digest.sent}건 · 실패 {runRow.digest.failed}건
                     </td>
                     <td>{runRow.failureAlert.triggered ? runRow.failureAlert.detail : "정상"}</td>
                     <td>{runRow.prune.pruned}건</td>

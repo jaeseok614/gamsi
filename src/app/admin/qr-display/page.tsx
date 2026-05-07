@@ -19,11 +19,11 @@ export default async function AdminQrDisplayPage() {
       <div className="qr-display-shell">
         <header className="qr-display-header">
           <div>
-            <p className="eyebrow">WorkGuard 현장 인증</p>
+            <p className="eyebrow">워크가드 현장 인증</p>
             <h1>출퇴근 QR 표시</h1>
           </div>
           <div className="actions-row" style={{ justifyContent: "flex-end" }}>
-            <Link className="button secondary" href="/dashboard?view=settings#field-verification">
+            <Link className="button secondary" href="/dashboard?view=settings&settingsTab=integrations#field-verification">
               <Settings size={16} />
               근무지 설정
             </Link>

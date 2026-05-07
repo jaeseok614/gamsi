@@ -14,6 +14,7 @@ import {
   InvitationCreateForm,
   InvitationActionButtons,
   OnboardingChecklistForm,
+  PermissionMatrixPanel,
   PolicySettingsForm,
   TeamCreateForm,
   TeamEditList,
@@ -28,7 +29,7 @@ import {
   WeeklyScheduleBoard
 } from "@/components/dashboard-advanced-actions";
 import { OrganizationPanel } from "@/components/organization-panel";
-import { GroupwarePanel } from "@/components/groupware-panel";
+import { GroupwarePanel, type GroupwareTab } from "@/components/groupware-panel";
 import {
   ActiveSessionsPanel,
   ApprovalButtons,
@@ -382,6 +383,7 @@ type DashboardPageProps = {
 };
 
 type DashboardView = "employee" | "groupware" | "organization" | "workbox" | "notifications" | "risk" | "approvals" | "reports" | "settings";
+type SettingsTab = "account" | "company" | "policy" | "organization" | "integrations" | "operations";
 type NotificationGroupParam = "ALL" | "APPROVAL" | "LEAVE" | "MISSING" | "MONTH_CLOSE" | "OTHER";
 type RiskStatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED" | "DISMISSED";
 type RiskTypeFilter =
@@ -534,6 +536,12 @@ function dashboardRiskHref(params?: {
   );
 }
 
+function dashboardSettingsHref(tab: SettingsTab) {
+  return dashboardViewHref("settings", {
+    settingsTab: tab
+  });
+}
+
 function DashboardMetricLink({
   label,
   value,
@@ -589,6 +597,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const orgStatus = firstValue(query.orgStatus) ?? "";
   const orgSearch = firstValue(query.orgSearch) ?? "";
   const groupwareSearch = firstValue(query.groupwareSearch) ?? "";
+  const groupwareSearchType = firstValue(query.groupwareSearchType) ?? "ALL";
+  const groupwareSearchCategory = firstValue(query.groupwareSearchCategory) ?? "ALL";
+  const groupwareSearchAuthorId = firstValue(query.groupwareSearchAuthorId) ?? "";
+  const groupwareSearchFrom = firstValue(query.groupwareSearchFrom) ?? "";
+  const groupwareSearchTo = firstValue(query.groupwareSearchTo) ?? "";
+  const groupwareNoticeFilter = firstValue(query.groupwareNoticeFilter) ?? "ALL";
+  const groupwareLibraryCategory = firstValue(query.groupwareLibraryCategory) ?? "ALL";
+  const groupwareLibrarySearch = firstValue(query.groupwareLibrarySearch) ?? "";
+  const groupwareAnnouncementId = firstValue(query.groupwareAnnouncementId) ?? "";
+  const groupwareLibraryItemId = firstValue(query.groupwareLibraryItemId) ?? "";
+  const groupwareDocumentId = firstValue(query.groupwareDocumentId) ?? "";
+  const groupwareOperationAction = firstValue(query.groupwareOperationAction) ?? "ALL";
+  const groupwareOperationActorId = firstValue(query.groupwareOperationActorId) ?? "";
+  const groupwareOperationFrom = firstValue(query.groupwareOperationFrom) ?? "";
+  const groupwareOperationTo = firstValue(query.groupwareOperationTo) ?? "";
+  const groupwareLibraryStatus = firstValue(query.groupwareLibraryStatus) ?? "ACTIVE";
+  const groupwareLibraryPermissionUserId = firstValue(query.groupwareLibraryPermissionUserId) ?? "";
+  const rawGroupwareTab = firstValue(query.groupwareTab) ?? "";
+  const rawSettingsTab = firstValue(query.settingsTab) ?? "";
+  const settingsPermissionUserId = firstValue(query.settingsPermissionUserId) ?? "";
   const rawWorkboxFilter = firstValue(query.workboxFilter) ?? "";
   const workThreadId = firstValue(query.workThreadId) ?? "";
   const rawRiskStatus = firstValue(query.riskStatus) ?? "";
@@ -606,7 +634,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const approvalTeamId = rawApprovalTeamId || dashboardPersonalization?.defaultApprovalFilters.teamId || "";
   const approvalFrom = rawApprovalFrom || dashboardPersonalization?.defaultApprovalFilters.from || "";
   const approvalTo = rawApprovalTo || dashboardPersonalization?.defaultApprovalFilters.to || "";
-  const notificationCenter = await getNotificationCenter(user);
   const organizationData = await getOrganizationDashboard(user, {
     selectedUserId: orgUserId,
     teamId: orgTeamId,
@@ -618,8 +645,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     threadId: workThreadId
   });
   const groupwareData = await getGroupwareDashboard(user, {
-    search: groupwareSearch
+    search: groupwareSearch,
+    searchType: groupwareSearchType,
+    searchCategory: groupwareSearchCategory,
+    searchAuthorId: groupwareSearchAuthorId,
+    searchFrom: groupwareSearchFrom,
+    searchTo: groupwareSearchTo,
+    operationAction: groupwareOperationAction,
+    operationActorId: groupwareOperationActorId,
+    operationFrom: groupwareOperationFrom,
+    operationTo: groupwareOperationTo,
+    libraryStatus: groupwareLibraryStatus,
+    libraryPermissionUserId: groupwareLibraryPermissionUserId,
+    announcementId: groupwareAnnouncementId,
+    libraryItemId: groupwareLibraryItemId,
+    documentId: groupwareDocumentId
   });
+  const notificationCenter = await getNotificationCenter(user);
   const currentPolicy = await getCurrentWorkPolicy(user.companyId);
   const snapshot = await getAttendanceSnapshot(user.id);
   const employeeScheduleBoard = await getEmployeeScheduleBoard(user.id);
@@ -642,7 +684,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const monthlyReport = canViewReports(user.role) ? await getMonthlyReport(user) : null;
   const laborRiskReport = canViewReports(user.role) ? await getLaborRiskReport(user) : null;
   const payrollReport = canViewReports(user.role) ? await getPayrollReport(user) : null;
-  const adminSettings = canAdminSettings(user.role) ? await getAdminSettings(user) : null;
+  const adminSettings = canAdminSettings(user.role)
+    ? await getAdminSettings(user, {
+        permissionUserId: settingsPermissionUserId
+      })
+    : null;
   const activeSessions = await listActiveSessions(user.id, currentAuthSession?.id ?? null);
 
   const session = snapshot.session;
@@ -737,6 +783,45 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ? preferredDefaultView
       : availableViews[0];
   const activeViewMeta = dashboardViewMeta(activeView);
+  const legacyGroupwareTabMap: Record<string, GroupwareTab> = {
+    board: "announcements",
+    contacts: "operations",
+    profile: "operations",
+    performance: "operations",
+    payroll: "operations",
+    memos: "operations"
+  };
+  const activeGroupwareTab = (
+    ["overview", "announcements", "documents", "library", "operations"] as const
+  ).includes(rawGroupwareTab as GroupwareTab)
+    ? (rawGroupwareTab as GroupwareTab)
+    : legacyGroupwareTabMap[rawGroupwareTab] ??
+      (groupwareDocumentId
+        ? "documents"
+        : groupwareLibraryItemId
+          ? "library"
+          : groupwareAnnouncementId
+            ? "announcements"
+            : orgUserId
+              ? "operations"
+              : "overview");
+  const requestedSettingsTab = (
+    ["account", "company", "policy", "organization", "integrations", "operations"] as const
+  ).includes(rawSettingsTab as SettingsTab)
+    ? (rawSettingsTab as SettingsTab)
+    : "account";
+  const allSettingsTabs = [
+    { key: "account", label: "계정" },
+    { key: "company", label: "회사", adminOnly: true },
+    { key: "policy", label: "정책", adminOnly: true },
+    { key: "organization", label: "조직", adminOnly: true },
+    { key: "integrations", label: "연동", adminOnly: true },
+    { key: "operations", label: "운영 관제", adminOnly: true }
+  ] satisfies Array<{ key: SettingsTab; label: string; adminOnly?: boolean }>;
+  const settingsTabs = allSettingsTabs.filter((tab) => !tab.adminOnly || Boolean(adminSettings));
+  const activeSettingsTab = settingsTabs.some((tab) => tab.key === requestedSettingsTab)
+    ? requestedSettingsTab
+    : settingsTabs[0]?.key ?? "account";
 
   return (
     <div className="app-shell">
@@ -891,6 +976,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               mentionableUsers={workboxData.mentionableUsers}
               assignableUsers={workboxData.assignableUsers}
               viewerId={user.id}
+              activeTab={activeGroupwareTab}
+              noticeFilter={groupwareNoticeFilter}
+              libraryCategoryFilter={groupwareLibraryCategory}
+              librarySearch={groupwareLibrarySearch}
+              selectedAnnouncementId={groupwareAnnouncementId}
+              selectedLibraryItemId={groupwareLibraryItemId}
+              selectedDocumentId={groupwareDocumentId}
             />
           </section>
         ) : null}
@@ -951,8 +1043,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="employee-mobile-focus">
                   <div className="actions-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                     <div className="stack" style={{ gap: 4 }}>
-                      <span className="muted">현재 상태</span>
-                      <strong>{statusLabels[snapshot.latestStatus]}</strong>
+                      <span className="muted">오늘 할 일</span>
+                      <strong>{canCheckOut ? "퇴근 기록" : canCheckIn ? "출근 기록" : "근태 확인"}</strong>
+                      <span className="muted">현재 {statusLabels[snapshot.latestStatus]}</span>
                     </div>
                     <span className={`status-pill ${snapshot.latestStatus === "OFFLINE" ? "gray" : "green"}`}>
                       {canCheckOut ? "근무 중" : canCheckIn ? "출근 전" : "기록 완료"}
@@ -1274,8 +1367,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <DashboardMetricLink label="증빙 부족" value={riskData.stats.missingEvidenceRisks} href={dashboardRiskHref({ type: "MISSING_EVIDENCE" }, "risk-workflow")} caption="해당 리스크만 보기" />
               <DashboardMetricLink label="미처리" value={riskData.stats.openCount} href={dashboardRiskHref({ status: "OPEN" }, "risk-workflow")} caption="미처리 리스크 보기" />
               <DashboardMetricLink label="처리 중" value={riskData.stats.inProgressCount} href={dashboardRiskHref({ status: "IN_PROGRESS" }, "risk-workflow")} caption="처리 중 리스크 보기" />
-              <DashboardMetricLink label="24시간 주의" value={riskData.stats.atRiskCount} href={dashboardRiskHref(undefined, "risk-workflow")} caption="SLA 주의 리스크 확인" />
-              <DashboardMetricLink label="48시간 초과" value={riskData.stats.overdueCount} href={dashboardRiskHref(undefined, "risk-workflow")} caption="SLA 초과 리스크 확인" />
+              <DashboardMetricLink label="24시간 주의" value={riskData.stats.atRiskCount} href={dashboardRiskHref(undefined, "risk-workflow")} caption="처리기한 주의 리스크 확인" />
+              <DashboardMetricLink label="48시간 초과" value={riskData.stats.overdueCount} href={dashboardRiskHref(undefined, "risk-workflow")} caption="처리기한 초과 리스크 확인" />
               <DashboardMetricLink label="담당자 미지정" value={riskData.stats.unassignedCount} href={dashboardRiskHref({ status: "OPEN" }, "risk-workflow")} caption="담당자 없는 미처리 리스크 보기" />
               <DashboardMetricLink label="지각 위험" value={riskData.stats.lateRisks} href={dashboardRiskHref({ type: "LATE_RISK" }, "risk-workflow")} caption="해당 리스크만 보기" />
               <DashboardMetricLink label="출퇴근 누락" value={riskData.stats.missingCheckRisks} href={dashboardRiskHref({ type: "MISSING_CHECK_IN_OUT" }, "risk-workflow")} caption="해당 리스크만 보기" />
@@ -1488,8 +1581,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     value={approvalInbox.approvals.filter((approval) => approval.attachments.length > 0).length}
                     href={dashboardApprovalsHref(undefined, "approvals-detail")}
                   />
-                  <DashboardMetricLink label="SLA 주의" value={approvalInbox.stats.atRisk} href={dashboardApprovalsHref(undefined, "approvals-inbox")} />
-                  <DashboardMetricLink label="SLA 초과" value={approvalInbox.stats.overdue} href={dashboardApprovalsHref(undefined, "approvals-inbox")} />
+                  <DashboardMetricLink label="처리기한 주의" value={approvalInbox.stats.atRisk} href={dashboardApprovalsHref(undefined, "approvals-inbox")} />
+                  <DashboardMetricLink label="처리기한 초과" value={approvalInbox.stats.overdue} href={dashboardApprovalsHref(undefined, "approvals-inbox")} />
                 </div>
 
                 <ApprovalInboxManager
@@ -1541,7 +1634,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <strong style={{ fontSize: 22 }}>{selectedApproval.ageLabel}</strong>
                       </div>
                       <div className="metric">
-                        <span>SLA</span>
+                        <span>처리기한</span>
                         <strong style={{ fontSize: 22 }}>
                           {selectedApproval.slaStatus === "OVERDUE"
                             ? "초과"
@@ -2684,10 +2777,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div>
               <h2 style={{ margin: 0 }}>계정 및 운영 설정</h2>
               <p className="muted" style={{ margin: "8px 0 0" }}>
-                개인 계정 보안을 먼저 관리하고, 관리자 권한이 있으면 회사 정책과 외부 연동 설정까지 이어서 조정할 수 있습니다.
+                계정, 회사, 정책, 조직, 연동, 운영 관제를 탭으로 나눠 필요한 설정만 확인합니다.
               </p>
             </div>
 
+            <nav className="dashboard-tabs" aria-label="설정 하위 메뉴">
+              {settingsTabs.map((tab) => (
+                <Link
+                  key={tab.key}
+                  href={dashboardSettingsHref(tab.key)}
+                  aria-current={activeSettingsTab === tab.key ? "page" : undefined}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </nav>
+
+            {activeSettingsTab === "account" ? (
             <div className="split">
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <h3 style={{ margin: 0 }}>비밀번호 변경</h3>
@@ -2704,9 +2810,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ActiveSessionsPanel sessions={activeSessions} />
               </div>
             </div>
+            ) : null}
 
             {adminSettings ? (
               <>
+            {activeSettingsTab === "company" ? (
             <div className="split">
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <h3 style={{ margin: 0 }}>회사 설정</h3>
@@ -2717,9 +2825,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 />
               </div>
               <div className="panel stack" style={{ background: "#fbfdff" }}>
-                <h3 style={{ margin: 0 }}>SaaS 플랜</h3>
+                <h3 style={{ margin: 0 }}>서비스 플랜</h3>
                 <CompanyPlanSettingsForm summary={adminSettings.planSummary} />
               </div>
+            </div>
+            ) : null}
+
+            {activeSettingsTab === "policy" ? (
+            <>
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <h3 style={{ margin: 0 }}>계산 정책</h3>
                 <PolicySettingsForm
@@ -2744,8 +2857,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   nightWorkEnd={adminSettings.currentPolicy.nightWorkEnd}
                 />
               </div>
-            </div>
+            </>
+            ) : null}
 
+            {activeSettingsTab === "integrations" ? (
+            <>
             <div className="panel stack" style={{ background: "#fbfdff" }}>
               <h3 style={{ margin: 0 }}>외부 연동</h3>
               <IntegrationSettingsForm
@@ -2765,7 +2881,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <h3 style={{ margin: 0 }}>현장 QR 출퇴근</h3>
               <WorkLocationSettingsForm summary={adminSettings.verificationSummary} />
             </div>
+            </>
+            ) : null}
 
+            {activeSettingsTab === "operations" ? (
+            <>
+            <div id="permission-matrix" className="panel stack" style={{ background: "#fbfdff" }}>
+              <h3 style={{ margin: 0 }}>그룹웨어 권한 매트릭스</h3>
+              <PermissionMatrixPanel
+                summary={adminSettings.permissionMatrixSummary}
+                users={adminSettings.users.map((member) => ({
+                  id: member.id,
+                  name: member.name,
+                  email: member.email,
+                  role: member.role,
+                  teamName: member.team?.name ?? null
+                }))}
+              />
+            </div>
             <div className="split">
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <h3 style={{ margin: 0 }}>운영 자동화</h3>
@@ -2781,7 +2914,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <h3 style={{ margin: 0 }}>증빙 보안과 감사</h3>
               <EvidenceSecuritySettingsForm summary={adminSettings.evidenceSummary} />
             </div>
+            </>
+            ) : null}
 
+            {activeSettingsTab === "policy" ? (
             <div className="split">
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <div className="actions-row" style={{ justifyContent: "space-between" }}>
@@ -2854,7 +2990,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </div>
             </div>
+            ) : null}
 
+            {activeSettingsTab === "organization" ? (
+            <>
             <div className="split">
               <div className="panel stack" style={{ background: "#fbfdff" }}>
                 <h3 style={{ margin: 0 }}>팀 생성</h3>
@@ -3015,6 +3154,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="empty">아직 보낸 초대가 없습니다.</div>
               )}
             </div>
+            </>
+            ) : null}
               </>
             ) : (
               <div className="empty">개인 계정 보안 설정은 위 카드에서 바로 관리할 수 있습니다.</div>

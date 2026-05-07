@@ -1,7 +1,7 @@
 {
   "name": "워크가드",
   "short_name": "워크가드",
-  "description": "모바일에서 출퇴근, 승인, 노무 리스크 대응을 빠르게 처리하는 근태 PWA",
+  "description": "모바일에서 출퇴근, 승인, 노무 리스크 대응을 빠르게 처리하는 근태 웹앱",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#f9fafb",

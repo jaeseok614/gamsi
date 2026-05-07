@@ -319,7 +319,7 @@ export async function runOperationsAutomation(input?: {
             skipped: 1,
             failed: 0,
             details: [
-              settings.dailyDigestEnabled ? "자동 digest를 보낼 운영 담당자가 없습니다." : "자동 digest가 비활성화되어 있습니다."
+              settings.dailyDigestEnabled ? "자동 요약 알림을 보낼 운영 담당자가 없습니다." : "자동 요약 알림이 비활성화되어 있습니다."
             ]
           };
 

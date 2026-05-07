@@ -1,6 +1,7 @@
 import { ApprovalType, type User } from "@/generated/prisma";
 
 import { getAnnualLeaveSummaryMap, getLeaveBalanceAdjustments } from "@/lib/leave";
+import { calculateRequiredBreakMinutes } from "@/lib/policy-engine";
 import { prisma } from "@/lib/prisma";
 import { formatMinutes, getKstDateString, kstMonthBounds, monthDateBounds } from "@/lib/time";
 
@@ -195,12 +196,14 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
           checkOutAt: session.checkOutAt
         })
       : 0;
-    const hasBreakRisk = session.grossMinutes >= 8 * 60 && session.breakMinutes < company.defaultBreakMinutes;
+    const requiredBreakMinutes = calculateRequiredBreakMinutes(session.grossMinutes, company.defaultBreakMinutes);
+    const hasBreakRisk = requiredBreakMinutes > 0 && session.breakMinutes < requiredBreakMinutes;
 
     return {
       ...session,
       schedule,
       scheduleMismatchMinutes,
+      requiredBreakMinutes,
       hasBreakRisk,
       relatedLeaveRequests: leaveRequests.filter(
         (request) => request.requesterId === session.userId && requestCoversDate(request, session.workDate)
@@ -231,7 +234,7 @@ export async function getMonthlyReport(actor: Actor, month = getKstDateString().
       user: session.user,
       grossMinutes: session.grossMinutes,
       breakMinutes: session.breakMinutes,
-      requiredBreakMinutes: company.defaultBreakMinutes
+      requiredBreakMinutes: session.requiredBreakMinutes
     }));
 
   const leaveBalanceRows = users.map((user) => ({

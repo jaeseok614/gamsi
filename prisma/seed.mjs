@@ -223,7 +223,7 @@ async function main() {
   const hr = await prisma.user.create({
     data: {
       companyId: company.id,
-      name: "박HR",
+      name: "박인사",
       email: "hr@gamsi.kr",
       passwordHash,
       role: Role.HR,
@@ -565,7 +565,7 @@ async function main() {
         uploaderId: employee.id,
         filename: "leave-handover.txt",
         mimeType: "text/plain",
-        content: "휴가 인수인계\n- 고객 문의: 김팀장에게 전달\n- 배포 모니터링: 박HR 백업\n- 일정 공유 완료"
+        content: "휴가 인수인계\n- 고객 문의: 김팀장에게 전달\n- 배포 모니터링: 박인사 백업\n- 일정 공유 완료"
       }),
       await writeSeedAttachment({
         companyId: company.id,

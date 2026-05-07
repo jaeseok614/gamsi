@@ -14,6 +14,7 @@ import { getEvidenceSecuritySummary } from "@/lib/evidence";
 import { getManagedUsers } from "@/lib/manager";
 import {
   buildHolidayDateSet,
+  calculateRequiredBreakMinutes,
   calculateHolidayWorkMinutes,
   calculateNightWorkMinutes,
   getCompanyHolidays,
@@ -176,7 +177,7 @@ function riskLawBasis(type: RiskType) {
 
 function riskRecommendedActions(type: RiskType) {
   const map: Record<RiskType, string[]> = {
-    WEEKLY_LIMIT: ["이번 주 남은 스케줄 축소", "초과근로 승인 근거 확인", "팀장/HR 재배치 검토"],
+    WEEKLY_LIMIT: ["이번 주 남은 스케줄 축소", "초과근로 승인 근거 확인", "팀장/인사 재배치 검토"],
     UNAPPROVED_OVERTIME: ["승인 요청 생성 여부 확인", "증빙 첨부 요청", "반복 시 현장 교육 메모 남김"],
     REPEATED_OVERTIME: ["반복 원인 분류", "주간 인력 재배치", "다음 주 템플릿 조정"],
     MISSING_EVIDENCE: ["증빙 첨부 재요청", "반려 또는 보완 마감일 지정", "반복 건수 추적"],
@@ -243,6 +244,7 @@ function riskEvidenceFacts(type: RiskType, evidence: Prisma.JsonValue | null | u
   const overtimeMinutes = getNumberValue(record, "overtimeMinutes");
   const grossMinutes = getNumberValue(record, "grossMinutes");
   const breakMinutes = getNumberValue(record, "breakMinutes");
+  const requiredBreakMinutes = getNumberValue(record, "requiredBreakMinutes");
   const shiftName = getStringValue(record, "shiftName");
   const requestedTime = getStringValue(record, "requestedTime");
   const nightWorkMinutes = getNumberValue(record, "nightWorkMinutes");
@@ -271,6 +273,9 @@ function riskEvidenceFacts(type: RiskType, evidence: Prisma.JsonValue | null | u
   }
   if (breakMinutes !== null && type === RiskType.BREAK_VIOLATION) {
     facts.push(`휴게 ${formatMinutes(breakMinutes)}`);
+  }
+  if (requiredBreakMinutes !== null && type === RiskType.BREAK_VIOLATION) {
+    facts.push(`기준 휴게 ${formatMinutes(requiredBreakMinutes)}`);
   }
   if (requestedTime && type === RiskType.MISSING_CHECK_IN_OUT) {
     facts.push(`요청 시각 ${requestedTime}`);
@@ -737,7 +742,8 @@ export async function refreshRiskSignalsForUserIds(input: {
         });
       }
 
-      if (session.grossMinutes < 8 * 60 || session.breakMinutes >= company.defaultBreakMinutes) {
+      const requiredBreakMinutes = calculateRequiredBreakMinutes(session.grossMinutes, company.defaultBreakMinutes);
+      if (requiredBreakMinutes === 0 || session.breakMinutes >= requiredBreakMinutes) {
         continue;
       }
 
@@ -748,12 +754,12 @@ export async function refreshRiskSignalsForUserIds(input: {
         type: RiskType.BREAK_VIOLATION,
         level: session.grossMinutes >= 10 * 60 ? RiskLevel.HIGH : RiskLevel.MEDIUM,
         title: "휴게시간 부족 가능성",
-        message: `${dateKey(session.workDate)} 총 체류시간이 ${formatMinutes(session.grossMinutes)}인데 휴게는 ${session.breakMinutes}분만 기록되었습니다.`,
+        message: `${dateKey(session.workDate)} 총 체류시간이 ${formatMinutes(session.grossMinutes)}인데 휴게는 ${session.breakMinutes}분만 기록되었습니다. 기준 휴게 ${requiredBreakMinutes}분을 확인하세요.`,
         evidence: {
           workDate: dateKey(session.workDate),
           grossMinutes: session.grossMinutes,
           breakMinutes: session.breakMinutes,
-          requiredBreakMinutes: company.defaultBreakMinutes
+          requiredBreakMinutes
         }
       });
     }

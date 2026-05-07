@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const retentionCutoff = new Date(Date.now() - evidenceSettings.retentionDays * 24 * 60 * 60 * 1000);
   if (attachment.createdAt < retentionCutoff && !canViewReports(user.role)) {
-    return jsonError("보관기간이 지난 증빙은 HR/Admin 권한으로만 조회할 수 있습니다.", 410);
+    return jsonError("보관기간이 지난 증빙은 인사 담당/관리자 권한으로만 조회할 수 있습니다.", 410);
   }
 
   const stored = await readStoredAttachment(attachment.storagePath);

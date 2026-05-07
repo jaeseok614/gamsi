@@ -16,6 +16,7 @@ async function parsePayload(request: NextRequest) {
       teamId: String(formData.get("teamId") ?? "") || null,
       category: String(formData.get("category") ?? ""),
       publishAt: String(formData.get("publishAt") ?? "") || null,
+      expiresAt: String(formData.get("expiresAt") ?? "") || null,
       isPinned: formData.get("isPinned") === "true",
       allowComments: formData.get("allowComments") === "true",
       attachments: formData.getAll("attachments").filter((value): value is File => value instanceof File)
@@ -29,6 +30,7 @@ async function parsePayload(request: NextRequest) {
     teamId?: string | null;
     category?: string | null;
     publishAt?: string | null;
+    expiresAt?: string | null;
     isPinned?: boolean;
     allowComments?: boolean;
   };
@@ -39,6 +41,7 @@ async function parsePayload(request: NextRequest) {
     teamId: body.teamId,
     category: body.category,
     publishAt: body.publishAt,
+    expiresAt: body.expiresAt,
     isPinned: Boolean(body.isPinned),
     allowComments: Boolean(body.allowComments),
     attachments: [] as File[]
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
       teamId: payload.teamId,
       category: payload.category,
       publishAt: payload.publishAt,
+      expiresAt: payload.expiresAt,
       isPinned: payload.isPinned,
       allowComments: payload.allowComments
     });

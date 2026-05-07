@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     message?: string;
     pathname?: string;
+    apiPath?: string | null;
     digest?: string | null;
     stack?: string | null;
   };
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
       : null,
     message,
     pathname: body.pathname,
+    apiPath: body.apiPath,
     digest: body.digest,
     stack: body.stack
   });

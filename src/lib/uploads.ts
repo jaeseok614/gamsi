@@ -292,6 +292,21 @@ export function formatFileSize(sizeBytes: number) {
   return `${sizeBytes}B`;
 }
 
+export function canPreviewAttachment(input: { mimeType: string; originalName?: string | null }) {
+  const mimeType = input.mimeType.toLowerCase();
+  const extension = input.originalName ? fileExtension(input.originalName) : "";
+  return (
+    mimeType === "application/pdf" ||
+    mimeType.startsWith("image/") ||
+    mimeType === "text/plain" ||
+    extension === ".txt"
+  );
+}
+
+export function attachmentContentDisposition(disposition: "attachment" | "inline", originalName: string) {
+  return `${disposition}; filename*=UTF-8''${encodeURIComponent(originalName)}`;
+}
+
 function fileExtension(name: string) {
   return path.extname(name).toLowerCase();
 }

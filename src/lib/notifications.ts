@@ -1454,7 +1454,7 @@ export async function runNotificationScheduler(input?: {
         candidate.escalationLevel === "UNASSIGNED"
           ? "담당자 지정 필요"
           : candidate.escalationLevel === "OVERDUE"
-            ? "48시간 SLA 초과"
+            ? "처리기한 48시간 초과"
             : "24시간 미처리";
 
       for (const recipientId of candidate.recipientIds) {

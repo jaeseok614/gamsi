@@ -10,13 +10,14 @@ import { getEvidenceSecuritySummary } from "@/lib/evidence";
 import { getIntegrationOpsSummary, getIntegrationSettings, getRecentIntegrationDispatchLogs } from "@/lib/integrations";
 import { getOnboardingSummary } from "@/lib/onboarding";
 import { getDeploymentOpsSummary } from "@/lib/ops";
+import { getPermissionMatrixSummary } from "@/lib/permission-matrix";
 import { getCurrentWorkPolicy, getWorkPolicyVersions } from "@/lib/policy-engine";
 import { prisma } from "@/lib/prisma";
 import { getFieldVerificationSummary } from "@/lib/verification";
 
 type Actor = Pick<User, "id" | "companyId" | "role">;
 
-export async function getAdminSettings(actor: Actor) {
+export async function getAdminSettings(actor: Actor, input?: { permissionUserId?: string | null }) {
   if (actor.role !== "ADMIN") {
     throw new Error("관리자 설정 권한이 없습니다.");
   }
@@ -37,7 +38,8 @@ export async function getAdminSettings(actor: Actor) {
     evidenceSummary,
     onboardingSummary,
     planSummary,
-    verificationSummary
+    verificationSummary,
+    permissionMatrixSummary
   ] = await Promise.all([
     prisma.company.findUniqueOrThrow({
       where: {
@@ -101,7 +103,8 @@ export async function getAdminSettings(actor: Actor) {
     getEvidenceSecuritySummary(actor.companyId),
     getOnboardingSummary(actor.companyId),
     getCompanyPlanSummary(actor.companyId),
-    getFieldVerificationSummary(actor.companyId)
+    getFieldVerificationSummary(actor.companyId),
+    getPermissionMatrixSummary(actor.companyId, input?.permissionUserId)
   ]);
 
   return {
@@ -120,7 +123,8 @@ export async function getAdminSettings(actor: Actor) {
     evidenceSummary,
     onboardingSummary,
     planSummary,
-    verificationSummary
+    verificationSummary,
+    permissionMatrixSummary
   };
 }
 

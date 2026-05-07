@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 
 import { jsonError, requireApiUser } from "@/lib/api";
 import { recordGroupwareAttachmentDownload } from "@/lib/evidence";
-import { getDocumentLibraryVersionForActor } from "@/lib/groupware";
-import { readStoredAttachment } from "@/lib/uploads";
+import { getDocumentLibraryVersionForActor, notifyExcessiveLibraryDownloads } from "@/lib/groupware";
+import { attachmentContentDisposition, canPreviewAttachment, readStoredAttachment } from "@/lib/uploads";
 
 type RouteContext = {
   params: Promise<{
@@ -22,21 +22,25 @@ export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const version = await getDocumentLibraryVersionForActor(user, params.id);
     const stored = await readStoredAttachment(version.storagePath);
-    await recordGroupwareAttachmentDownload({
-      companyId: user.companyId,
-      actorUserId: user.id,
-      targetType: "document_library_version",
-      targetId: version.id,
-      originalName: version.originalName,
-      sourceType: "document_library",
-      sourceId: version.itemId,
-      ownerUserId: version.item.createdById
-    });
+    const preview = request.nextUrl.searchParams.get("preview") === "1" && canPreviewAttachment(version);
+    if (!preview) {
+      await recordGroupwareAttachmentDownload({
+        companyId: user.companyId,
+        actorUserId: user.id,
+        targetType: "document_library_version",
+        targetId: version.id,
+        originalName: version.originalName,
+        sourceType: "document_library",
+        sourceId: version.itemId,
+        ownerUserId: version.item.createdById
+      });
+      await notifyExcessiveLibraryDownloads(user, version.itemId);
+    }
     return new NextResponse(stored.content, {
       headers: {
         "content-type": version.mimeType,
         "content-length": String(stored.content.byteLength),
-        "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(version.originalName)}`
+        "content-disposition": attachmentContentDisposition(preview ? "inline" : "attachment", version.originalName)
       }
     });
   } catch (error) {

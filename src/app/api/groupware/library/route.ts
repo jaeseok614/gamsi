@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { jsonError, requireApiUser } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { createDocumentLibraryVersion } from "@/lib/groupware";
 import { saveDocumentLibraryVersionFile, validateApprovalAttachmentFiles } from "@/lib/uploads";
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
       accessScope: String(formData.get("accessScope") ?? ""),
       teamId: String(formData.get("teamId") ?? "") || null,
       description: String(formData.get("description") ?? ""),
+      isPinned: formData.get("isPinned") === "true",
       note: String(formData.get("note") ?? "")
     });
     const version = await saveDocumentLibraryVersionFile({
@@ -35,6 +37,19 @@ export async function POST(request: NextRequest) {
       versionNo: prepared.nextVersionNo,
       note: String(formData.get("note") ?? ""),
       file
+    });
+    await writeAuditLog({
+      companyId: user.companyId,
+      actorUserId: user.id,
+      action: "document_library.version.created",
+      targetType: "document_library_version",
+      targetId: version.id,
+      payload: {
+        itemId: prepared.item.id,
+        title: prepared.item.title,
+        versionNo: version.versionNo,
+        originalName: version.originalName
+      }
     });
 
     return NextResponse.json({

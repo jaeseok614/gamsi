@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!canViewReports(user.role)) {
-    return jsonError("증빙 패키지는 HR 또는 관리자만 생성할 수 있습니다.", 403);
+    return jsonError("증빙 패키지는 인사 담당 또는 관리자만 생성할 수 있습니다.", 403);
   }
 
   const month = request.nextUrl.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);

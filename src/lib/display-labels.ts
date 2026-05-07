@@ -11,6 +11,144 @@ export function roleLabel(role?: string | null) {
   return "직원";
 }
 
+export function planTierLabel(tier?: string | null) {
+  if (tier === "STARTER") {
+    return "기본";
+  }
+  if (tier === "GROWTH") {
+    return "성장";
+  }
+  if (tier === "ENTERPRISE") {
+    return "기업";
+  }
+  return "체험";
+}
+
+export function approvalStatusLabel(status?: string | null) {
+  if (status === "APPROVED") {
+    return "승인";
+  }
+  if (status === "REJECTED") {
+    return "반려";
+  }
+  return "대기";
+}
+
+export function approvalStatusTone(status?: string | null) {
+  if (status === "APPROVED") {
+    return "green";
+  }
+  if (status === "REJECTED") {
+    return "red";
+  }
+  return "yellow";
+}
+
+export function payrollStatementStatusLabel(status?: string | null) {
+  if (status === "LOCKED") {
+    return "잠금 발행";
+  }
+  if (status === "PUBLISHED") {
+    return "발행";
+  }
+  return "대기";
+}
+
+export function announcementCategoryLabel(category?: string | null) {
+  if (category === "RESOURCE") {
+    return "자료실";
+  }
+  if (category === "TEAM") {
+    return "게시판";
+  }
+  if (category === "HR") {
+    return "인사 안내";
+  }
+  return "공지";
+}
+
+export function documentCategoryLabel(category?: string | null) {
+  if (category === "EXPENSE") {
+    return "지출결의서";
+  }
+  if (category === "PURCHASE") {
+    return "구매요청서";
+  }
+  return "품의서";
+}
+
+export function documentStatusLabel(status?: string | null) {
+  return approvalStatusLabel(status);
+}
+
+export function documentStatusTone(status?: string | null) {
+  return approvalStatusTone(status);
+}
+
+export function libraryCategoryLabel(category?: string | null) {
+  if (category === "CONTRACT") {
+    return "계약서";
+  }
+  if (category === "LEAVE") {
+    return "휴가 정책";
+  }
+  if (category === "PAYROLL") {
+    return "급여 안내";
+  }
+  if (category === "FORM") {
+    return "서식";
+  }
+  return "회사 규정";
+}
+
+export function libraryScopeLabel(scope?: string | null) {
+  if (scope === "TEAM") {
+    return "부서";
+  }
+  if (scope === "HR") {
+    return "인사/관리자";
+  }
+  return "전체";
+}
+
+export function workThreadStatusLabel(status?: string | null) {
+  return status === "RESOLVED" ? "해결" : "미결";
+}
+
+export function workThreadStatusTone(status?: string | null) {
+  return status === "RESOLVED" ? "green" : "yellow";
+}
+
+export function workThreadPriorityLabel(priority?: string | null) {
+  if (priority === "LOW") {
+    return "낮음";
+  }
+  if (priority === "HIGH") {
+    return "높음";
+  }
+  if (priority === "URGENT") {
+    return "긴급";
+  }
+  return "보통";
+}
+
+export function riskLevelLabel(level?: string | null) {
+  if (level === "CRITICAL") {
+    return "심각";
+  }
+  if (level === "HIGH") {
+    return "높음";
+  }
+  if (level === "MEDIUM") {
+    return "주의";
+  }
+  return "낮음";
+}
+
+export function monthCloseStatusLabel(status?: string | null) {
+  return status === "CLOSED" ? "마감 완료" : "진행 중";
+}
+
 export function browserPermissionLabel(permission?: string | null) {
   if (permission === "granted") {
     return "허용됨";

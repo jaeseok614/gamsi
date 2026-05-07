@@ -7,6 +7,7 @@ import { webPushConfigured } from "@/lib/push";
 import { smtpConfigured } from "@/lib/email";
 
 type Actor = Pick<User, "id" | "companyId">;
+type AdminActor = Pick<User, "id" | "companyId" | "role">;
 
 export type HealthCheck = {
   key: string;
@@ -58,15 +59,25 @@ export type DeploymentOpsSummary = {
   };
   clientErrors: Array<{
     id: string;
+    key: string;
     pathname: string;
+    apiPath: string | null;
     message: string;
     digest: string | null;
+    stack: string | null;
     count: number;
+    firstSeenAt: Date;
     lastSeenAt: Date;
     actor: RecentOpsEvent["actor"];
+    status: "open" | "resolved";
+    resolvedAt: Date | null;
+    resolvedBy: RecentOpsEvent["actor"];
   }>;
   recentOpsEvents: RecentOpsEvent[];
 };
+
+const clientErrorReportedAction = "ops.client_error.reported";
+const clientErrorResolvedAction = "ops.client_error.resolved";
 
 export async function getPublicHealthSnapshot() {
   const checks: HealthCheck[] = [];
@@ -150,6 +161,7 @@ export async function reportClientError(input: {
   actor?: Actor | null;
   message: string;
   pathname?: string | null;
+  apiPath?: string | null;
   digest?: string | null;
   stack?: string | null;
 }) {
@@ -160,11 +172,17 @@ export async function reportClientError(input: {
   await writeAuditLog({
     companyId: input.actor.companyId,
     actorUserId: input.actor.id,
-    action: "ops.client_error.reported",
+    action: clientErrorReportedAction,
     targetType: "client_error",
-    targetId: input.digest?.trim() || input.pathname?.trim() || "unknown",
+    targetId: clientErrorGroupKey({
+      pathname: input.pathname?.trim() || "-",
+      apiPath: input.apiPath?.trim() || null,
+      digest: input.digest?.trim() || null,
+      message: input.message.trim()
+    }),
     payload: {
       pathname: input.pathname?.trim() || null,
+      apiPath: input.apiPath?.trim() || null,
       digest: input.digest?.trim() || null,
       message: input.message.trim(),
       stack: input.stack?.trim() || null
@@ -172,8 +190,42 @@ export async function reportClientError(input: {
   });
 }
 
+function clientErrorGroupKey(input: {
+  pathname: string;
+  apiPath?: string | null;
+  digest?: string | null;
+  message: string;
+}) {
+  return [
+    input.pathname || "-",
+    input.apiPath || "-",
+    input.digest || input.message
+  ].join(":");
+}
+
+export async function resolveClientError(actor: AdminActor, key: string) {
+  if (actor.role !== "ADMIN") {
+    throw new Error("운영 오류 해결 권한이 필요합니다.");
+  }
+  const targetId = key.trim();
+  if (!targetId) {
+    throw new Error("해결할 오류 식별자를 확인하세요.");
+  }
+
+  await writeAuditLog({
+    companyId: actor.companyId,
+    actorUserId: actor.id,
+    action: clientErrorResolvedAction,
+    targetType: "client_error",
+    targetId,
+    payload: {
+      key: targetId
+    }
+  });
+}
+
 export async function getDeploymentOpsSummary(companyId: string): Promise<DeploymentOpsSummary> {
-  const [health, recentOpsEvents, sampleDataEvent, clientErrorEvents] = await Promise.all([
+  const [health, recentOpsEvents, sampleDataEvent, clientErrorEvents, resolvedEvents] = await Promise.all([
     getPublicHealthSnapshot(),
     prisma.auditLog.findMany({
       where: {
@@ -209,7 +261,27 @@ export async function getDeploymentOpsSummary(companyId: string): Promise<Deploy
     prisma.auditLog.findMany({
       where: {
         companyId,
-        action: "ops.client_error.reported"
+        action: clientErrorReportedAction
+      },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 80
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        companyId,
+        action: clientErrorResolvedAction,
+        targetType: "client_error"
       },
       include: {
         actor: {
@@ -226,28 +298,41 @@ export async function getDeploymentOpsSummary(companyId: string): Promise<Deploy
       take: 80
     })
   ]);
+  const resolvedByKey = new Map(resolvedEvents.map((event) => [event.targetId, event]));
   const groupedClientErrors = new Map<string, DeploymentOpsSummary["clientErrors"][number]>();
   for (const event of clientErrorEvents) {
     const payload = event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
       ? (event.payload as Record<string, unknown>)
       : {};
     const pathname = typeof payload.pathname === "string" ? payload.pathname : "-";
+    const apiPath = typeof payload.apiPath === "string" && payload.apiPath.trim() ? payload.apiPath : null;
     const message = typeof payload.message === "string" ? payload.message : "클라이언트 오류";
     const digest = typeof payload.digest === "string" ? payload.digest : null;
-    const key = `${pathname}:${digest ?? message}`;
+    const stack = typeof payload.stack === "string" && payload.stack.trim() ? payload.stack : null;
+    const key = event.targetId || clientErrorGroupKey({ pathname, apiPath, digest, message });
     const existing = groupedClientErrors.get(key);
     if (existing) {
       existing.count += 1;
+      existing.firstSeenAt = event.createdAt < existing.firstSeenAt ? event.createdAt : existing.firstSeenAt;
       continue;
     }
+    const resolvedEvent = resolvedByKey.get(key);
+    const isResolved = Boolean(resolvedEvent && resolvedEvent.createdAt >= event.createdAt);
     groupedClientErrors.set(key, {
       id: event.id,
+      key,
       pathname,
+      apiPath,
       message,
       digest,
+      stack,
       count: 1,
+      firstSeenAt: event.createdAt,
       lastSeenAt: event.createdAt,
-      actor: event.actor
+      actor: event.actor,
+      status: isResolved ? "resolved" : "open",
+      resolvedAt: isResolved ? resolvedEvent?.createdAt ?? null : null,
+      resolvedBy: isResolved ? resolvedEvent?.actor ?? null : null
     });
   }
 
@@ -262,8 +347,8 @@ export async function getDeploymentOpsSummary(companyId: string): Promise<Deploy
     bootstrap: {
       seedCommand: "npm run db:seed",
       adminBootstrapCommand: "node scripts/bootstrap-admin.mjs admin@gamsi.kr '새 비밀번호' '관리자 이름'",
-      backupCommand: "node scripts/backup-db.mjs",
-      restoreCommand: "node scripts/restore-db.mjs ./backups/workguard-latest.sql"
+      backupCommand: "npm run db:backup:prod",
+      restoreCommand: "CONFIRM_RESTORE=production npm run db:restore:prod -- ./backups/workguard-production.sql"
     },
     readiness: {
       score: Math.round((readyCount / Math.max(1, totalCount)) * 100),
@@ -276,7 +361,14 @@ export async function getDeploymentOpsSummary(companyId: string): Promise<Deploy
       seededAt: sampleDataEvent?.createdAt ?? null,
       cleanupAvailable: Boolean(sampleDataEvent)
     },
-    clientErrors: Array.from(groupedClientErrors.values()).slice(0, 12),
+    clientErrors: Array.from(groupedClientErrors.values())
+      .sort((left, right) => {
+        if (left.status !== right.status) {
+          return left.status === "open" ? -1 : 1;
+        }
+        return right.lastSeenAt.getTime() - left.lastSeenAt.getTime();
+      })
+      .slice(0, 12),
     recentOpsEvents
   };
 }

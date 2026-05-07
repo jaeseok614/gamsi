@@ -20,6 +20,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const body = (await request.json().catch(() => ({}))) as {
     status?: string;
     reviewNote?: string | null;
+    delegateForUserId?: string | null;
   };
 
   try {
@@ -27,7 +28,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       await reviewDocumentRequest(user, {
         id: params.id,
         status: body.status === "APPROVED" ? "APPROVED" : "REJECTED",
-        reviewNote: body.reviewNote
+        reviewNote: body.reviewNote,
+        delegateForUserId: body.delegateForUserId
       })
     );
   } catch (error) {

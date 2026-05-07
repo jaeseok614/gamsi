@@ -432,7 +432,7 @@ async function sendSlackDigestWebhook(input: {
 }) {
   const url = input.webhookUrl.trim();
   if (!url) {
-    throw new Error("Slack webhook URL이 비어 있습니다.");
+    throw new Error("Slack 알림 수신 주소가 비어 있습니다.");
   }
 
   const host = (() => {
@@ -487,7 +487,7 @@ async function sendSlackDigestWebhook(input: {
   });
 
   if (!response.ok) {
-    throw new Error(`Slack webhook 응답이 비정상적입니다. (${response.status})`);
+    throw new Error(`Slack 알림 수신 주소 응답이 비정상적입니다. (${response.status})`);
   }
 }
 
@@ -597,7 +597,7 @@ export async function sendDigestPreview(input: {
         lines: preview.lines,
         footer: preview.slackFooter
       });
-      const detail = `Slack webhook으로 '${preview.slackTitle}' 요약 알림을 전송했습니다.`;
+      const detail = `Slack으로 '${preview.slackTitle}' 요약 알림을 전송했습니다.`;
       await appendIntegrationDispatchLog({
         companyId: input.companyId,
         actorUserId: input.actorUserId,
@@ -631,7 +631,7 @@ export async function sendDigestPreview(input: {
     }
   } else {
     const detail = input.settings.slackDigestEnabled
-      ? "Slack webhook URL이 설정되지 않았습니다."
+      ? "Slack 알림 수신 주소가 설정되지 않았습니다."
       : "Slack 요약 알림이 비활성화되어 있습니다.";
     await appendIntegrationDispatchLog({
       companyId: input.companyId,
@@ -682,7 +682,7 @@ export async function sendSlackTestMessage(input: {
   }
 
   if (!webhookUrl) {
-    const detail = `${detailPrefix}을 건너뛰었습니다. Slack webhook URL이 없습니다.`;
+    const detail = `${detailPrefix}을 건너뛰었습니다. Slack 알림 수신 주소가 없습니다.`;
     await appendIntegrationDispatchLog({
       companyId: input.companyId,
       actorUserId: input.actorUserId,
@@ -703,7 +703,7 @@ export async function sendSlackTestMessage(input: {
       webhookUrl,
       title: `${input.companyName} Slack 테스트`,
       lines: [
-        "Slack webhook 연결 확인",
+        "Slack 알림 수신 주소 연결 확인",
         "실패 로그와 전송 상태를 관리자 설정에서 바로 확인할 수 있습니다."
       ],
       footer: "워크가드 테스트 메시지"
@@ -813,10 +813,10 @@ export async function getIntegrationOpsSummary(companyId: string): Promise<Integ
       status: settings.slackDigestEnabled && settings.slackWebhookUrl.trim() ? "ready" : "warning",
       detail:
         settings.slackDigestEnabled && settings.slackWebhookUrl.trim()
-          ? "Slack digest와 webhook URL이 준비되었습니다."
+          ? "Slack 요약 알림과 수신 주소가 준비되었습니다."
           : settings.slackDigestEnabled
-            ? "Slack webhook URL이 비어 있습니다."
-            : "Slack digest가 비활성화되어 있습니다."
+            ? "Slack 알림 수신 주소가 비어 있습니다."
+            : "Slack 요약 알림이 비활성화되어 있습니다."
     },
     {
       key: "app_base_url",

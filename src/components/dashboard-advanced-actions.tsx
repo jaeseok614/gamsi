@@ -670,7 +670,7 @@ export function ApprovalInboxManager({
             id="bulk-review-note"
             value={reviewNote}
             onChange={(event) => setReviewNote(event.target.value)}
-            placeholder="SLA 지연 사유, 일괄 승인 기준, 후속 안내를 남겨주세요."
+            placeholder="처리기한 지연 사유, 일괄 승인 기준, 후속 안내를 남겨주세요."
           />
         </div>
         <div className="actions-row">
@@ -703,7 +703,7 @@ export function ApprovalInboxManager({
                   <strong>{approval.requester.name}</strong>
                 </label>
                 <span className={`status-pill ${slaTone(approval.slaStatus)}`}>
-                  {approval.slaStatus === "OVERDUE" ? "SLA 초과" : approval.slaStatus === "AT_RISK" ? "SLA 주의" : "SLA 정상"}
+                  {approval.slaStatus === "OVERDUE" ? "처리기한 초과" : approval.slaStatus === "AT_RISK" ? "처리기한 주의" : "처리기한 정상"}
                 </span>
               </div>
               <p style={{ marginTop: 10 }}>{approvalTypeLabel(approval.type)} · {approval.reason}</p>
@@ -1035,7 +1035,7 @@ export function RiskWorkflowBoard({
                   저장
                 </button>
                 <span className="muted">
-                  감지 {new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(signal.detectedAt))} · SLA 경과 {signal.slaAgeHours}시간
+                  감지 {new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(signal.detectedAt))} · 처리기한 경과 {signal.slaAgeHours}시간
                 </span>
               </div>
             </div>

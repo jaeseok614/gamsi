@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { roleLabel, workThreadPriorityLabel, workThreadStatusLabel, workThreadStatusTone } from "@/lib/display-labels";
+
 type WorkboxUser = {
   id: string;
   name: string;
@@ -248,7 +250,7 @@ export function WorkboxPanel({ summary }: { summary: WorkboxSummary }) {
                 >
                   <div className="stack" style={{ gap: 8 }}>
                     <div className="actions-row">
-                      <span className={`status-pill ${priorityTone(thread.priority)}`}>{thread.priority}</span>
+                      <span className={`status-pill ${priorityTone(thread.priority)}`}>{workThreadPriorityLabel(thread.priority)}</span>
                       <span className="status-pill gray">{targetTypeLabel(thread.targetType)}</span>
                       {thread.isUnread ? <span className="status-pill yellow">미읽음</span> : null}
                     </div>
@@ -283,8 +285,8 @@ export function WorkboxPanel({ summary }: { summary: WorkboxSummary }) {
                     {selected.targetSummary}
                   </p>
                 </div>
-                <span className={`status-pill ${selected.status === "RESOLVED" ? "green" : "yellow"}`}>
-                  {selected.status === "RESOLVED" ? "해결됨" : "진행 중"}
+                <span className={`status-pill ${workThreadStatusTone(selected.status)}`}>
+                  {workThreadStatusLabel(selected.status)}
                 </span>
               </div>
 
@@ -296,7 +298,7 @@ export function WorkboxPanel({ summary }: { summary: WorkboxSummary }) {
                       <option value="">미지정</option>
                       {summary.assignableUsers.map((user) => (
                         <option key={user.id} value={user.id}>
-                          {user.name} · {user.role}
+                          {user.name} · {roleLabel(user.role)}
                         </option>
                       ))}
                     </select>

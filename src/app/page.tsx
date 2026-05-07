@@ -58,7 +58,7 @@ export default function LandingPage() {
             <div>
               <div className="eyebrow">
                 <ShieldCheck size={16} />
-                노무 리스크 관리 SaaS
+                노무 리스크 관리 서비스
               </div>
               <h1>
                 근태 관리가 아니라,
@@ -66,7 +66,7 @@ export default function LandingPage() {
                 노무 리스크를 줄입니다
               </h1>
               <p>
-                초과근로, 포괄임금제, 근로시간 분쟁까지 모두 대비하는 근로시간 관리 SaaS입니다.
+                초과근로, 포괄임금제, 근로시간 분쟁까지 모두 대비하는 근로시간 관리 서비스입니다.
                 기록을 넘어 승인, 증빙, 리스크 알림까지 연결합니다.
               </p>
               <div className="hero-actions">
