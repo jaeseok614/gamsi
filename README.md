@@ -12,6 +12,18 @@ npm run db:seed
 npm run dev
 ```
 
+Docker로 앱까지 한 번에 확인하려면 아래 명령을 사용합니다. 새 DB 볼륨이면 스키마 반영 후 데모 데이터를 자동으로 넣고, 기존 데이터가 있으면 seed를 건너뜁니다.
+
+```bash
+docker compose --profile app up -d app
+```
+
+Playwright E2E는 브라우저와 네트워크 제약을 피하도록 전용 Docker 프로필로 고정했습니다.
+
+```bash
+npm run qa:e2e:docker
+```
+
 앱은 기본적으로 `http://localhost:3000`에서 실행됩니다. 이미 사용 중인 포트가 있으면 Next.js가 다른 포트를 안내합니다. 첫 화면은 워크가드 랜딩페이지이며, `/login`에서 데모 계정으로 앱에 진입합니다.
 
 ## Demo Accounts
@@ -84,7 +96,9 @@ WEB_PUSH_VAPID_PRIVATE_KEY="..."
 - 배포 상태는 공용 `/api/health`, 관리자용 `/api/admin/ops/status`에서 확인할 수 있습니다.
 - 관리자 설정의 `현장 QR 출퇴근`에서 근무지를 등록하고 60초짜리 QR 출퇴근 토큰을 발급할 수 있습니다.
 - 직원별 월간 “노동청 제출용” 증빙 패키지는 인사 리포트 화면에서 PDF/CSV/첨부 ZIP으로 다운로드합니다.
-- DB 백업/복구는 `npm run db:backup`, `npm run db:restore -- ./backups/workguard.sql`을 사용합니다.
+- DB 백업/복구는 로컬과 운영 명령을 분리했습니다. 로컬은 `npm run db:backup:local`, `npm run db:restore:local -- ./backups/workguard-local.sql`을 사용합니다. 운영 복구는 `CONFIRM_RESTORE=production npm run db:restore:prod -- ./backups/workguard-production.sql`처럼 명시 확인이 필요합니다.
+- 로컬 첨부파일 저장소를 쓰는 경우 백업 시 `*.uploads.tar.gz`와 `*.manifest.json`이 함께 생성되어 자료실/공지/결재/증빙 첨부파일 포함 여부를 확인할 수 있습니다.
+- 데모 데이터 초기화는 로컬에서 `npm run db:reset-demo`를 사용합니다. 운영 환경에서는 기본적으로 차단됩니다.
 - 현장 출퇴근 큐는 `IndexedDB + background sync`를 사용합니다. 서버 충돌이 난 항목은 자동 재전송하지 않고 `확인 필요` 상태로 남깁니다.
 - 운영 체크리스트는 [docs/OPERATIONS.md](docs/OPERATIONS.md)에 정리되어 있습니다.
 - Docker VPS 배포 절차는 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)에 정리되어 있습니다.

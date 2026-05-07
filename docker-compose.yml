@@ -21,6 +21,7 @@ services:
       context: .
     profiles:
       - app
+      - e2e
     depends_on:
       db:
         condition: service_healthy
@@ -38,13 +39,40 @@ services:
       WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:ops@workguard.local}
       WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
       WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      ATTACHMENT_UPLOAD_ROOT: /app/data/uploads/approval-attachments
     ports:
       - "3000:3000"
+    volumes:
+      - gamsi_uploads:/app/data/uploads
+    command: ["/bin/sh", "-c", "npm run db:push && npm run db:seed-if-empty && npm run start"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    profiles:
+      - e2e
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      CI: "true"
+      DATABASE_URL: postgresql://gamsi:gamsi@db:5432/gamsi?schema=public
+      PLAYWRIGHT_BASE_URL: http://app:3000
+      PLAYWRIGHT_WORKERS: ${PLAYWRIGHT_WORKERS:-1}
+      PLAYWRIGHT_WEB_SERVER: "false"
+      AUTH_SECRET: ${AUTH_SECRET:-local-docker-secret-change-before-production-32chars}
+      ATTACHMENT_UPLOAD_ROOT: /app/data/uploads/approval-attachments
+    volumes:
+      - gamsi_uploads:/app/data/uploads
+    command: ["/bin/sh", "-c", "npm run qa:e2e:prepare && npm run qa:e2e"]
 
   minio:
     image: minio/minio:latest
@@ -87,3 +115,4 @@ services:
 volumes:
   gamsi_postgres:
   gamsi_minio:
+  gamsi_uploads:

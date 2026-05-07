@@ -8,6 +8,7 @@ const webServerPort = new URL(baseURL).port || "3000";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalTeardown: "./tests/e2e/global-teardown.mjs",
   timeout: 90_000,
   workers: workerLimit,
   expect: {
