@@ -127,15 +127,18 @@ async function putQueuedCheckIn(page) {
 }
 
 test("오프라인 출근 큐가 온라인 전송되고 중복 충돌은 확인 필요 상태로 남는다", async ({ page, request, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const adminCookie = await loginApi(request, "admin@gamsi.kr");
   const employee = await createTempEmployee(request, adminCookie, "offline");
   const employeeCookie = await loginApi(request, employee.email);
   await addSessionCookie(page, employeeCookie, baseURL);
 
   await page.goto("/dashboard?view=employee", { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
   await expect(page.getByTestId("attendance-check-in")).toBeEnabled();
   await page.context().setOffline(true);
   await page.waitForFunction(() => !window.navigator.onLine);
+  await expect(page.getByTestId("field-mobile-readiness")).toContainText("기기 저장 0건");
   await page.getByTestId("attendance-check-in").click();
   await expect.poll(() => queueItems(page).then((items) => items.length)).toBe(1);
   await expect(page.getByText(/대기 1건/).first()).toBeVisible();
@@ -159,6 +162,8 @@ test("오프라인 출근 큐가 온라인 전송되고 중복 충돌은 확인 
       return items[0]?.status;
     })
     .toBe("blocked");
+  await expect(page.getByText("1건 확인")).toBeVisible();
+  await expect(page.getByRole("link", { name: "확인 필요" })).toBeVisible();
 
   await page.goto("/dashboard?view=notifications", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "대기 비우기" }).click();

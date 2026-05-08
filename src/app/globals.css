@@ -1352,7 +1352,8 @@ td {
   }
 
   .field-mobile-readiness div,
-  .field-mobile-readiness button {
+  .field-mobile-readiness button,
+  .field-mobile-readiness a.button {
     min-width: 0;
   }
 

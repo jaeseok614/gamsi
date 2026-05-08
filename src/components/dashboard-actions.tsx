@@ -1049,13 +1049,7 @@ export function ActiveSessionsPanel({ sessions }: { sessions: AccountSessionItem
 
 export function FieldQueueStatusBar() {
   const [queueCount, setQueueCount] = useState(0);
-  const [isOnline, setIsOnline] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-
-    return window.navigator.onLine;
-  });
+  const [isOnline, setIsOnline] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1212,13 +1206,8 @@ export function FieldQueueStatusBar() {
 export function FieldMobileReadinessCard() {
   const [queueCount, setQueueCount] = useState(0);
   const [blockedCount, setBlockedCount] = useState(0);
-  const [isOnline, setIsOnline] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-
-    return window.navigator.onLine;
-  });
+  const [latestBlockedLabel, setLatestBlockedLabel] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -1229,8 +1218,10 @@ export function FieldMobileReadinessCard() {
 
     const syncState = async () => {
       const [queue, meta] = await Promise.all([listFieldQueue().catch(() => []), getFieldQueueMeta().catch(() => ({ lastSyncAt: null }))]);
+      const blockedItems = queue.filter((item) => item.status === "blocked");
       setQueueCount(queue.length);
-      setBlockedCount(queue.filter((item) => item.status === "blocked").length);
+      setBlockedCount(blockedItems.length);
+      setLatestBlockedLabel(blockedItems[0]?.label ?? null);
       setLastSyncAt(meta.lastSyncAt);
       setIsOnline(window.navigator.onLine);
     };
@@ -1275,8 +1266,10 @@ export function FieldMobileReadinessCard() {
     setIsSyncing(true);
     await flushFieldQueue().catch(() => null);
     const [queue, meta] = await Promise.all([listFieldQueue().catch(() => []), getFieldQueueMeta().catch(() => ({ lastSyncAt: null }))]);
+    const blockedItems = queue.filter((item) => item.status === "blocked");
     setQueueCount(queue.length);
-    setBlockedCount(queue.filter((item) => item.status === "blocked").length);
+    setBlockedCount(blockedItems.length);
+    setLatestBlockedLabel(blockedItems[0]?.label ?? null);
     setLastSyncAt(meta.lastSyncAt);
     setIsSyncing(false);
   }
@@ -1289,21 +1282,28 @@ export function FieldMobileReadinessCard() {
       </div>
       <div>
         <span>충돌</span>
-        <strong>{blockedCount > 0 ? `${blockedCount}건` : "없음"}</strong>
+        <strong>{blockedCount > 0 ? `${blockedCount}건 확인` : "없음"}</strong>
+        {latestBlockedLabel ? <span>{latestBlockedLabel}</span> : null}
       </div>
       <div>
         <span>동기화</span>
         <strong>{lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "-"}</strong>
       </div>
-      <button
-        className="button secondary"
-        type="button"
-        disabled={!isOnline || queueCount === 0 || isSyncing}
-        onClick={() => void handleSyncNow()}
-      >
-        {isSyncing ? <RefreshCw size={15} /> : <Upload size={15} />}
-        {isSyncing ? "전송 중" : "동기화"}
-      </button>
+      {blockedCount > 0 ? (
+        <Link className="button secondary" href={dashboardViewHref("notifications", undefined, "field-queue-detail")}>
+          확인 필요
+        </Link>
+      ) : (
+        <button
+          className="button secondary"
+          type="button"
+          disabled={!isOnline || queueCount === 0 || isSyncing}
+          onClick={() => void handleSyncNow()}
+        >
+          {isSyncing ? <RefreshCw size={15} /> : <Upload size={15} />}
+          {isSyncing ? "전송 중" : "동기화"}
+        </button>
+      )}
     </div>
   );
 }
@@ -1830,19 +1830,18 @@ export function MissingClockAdjustmentForm({
   autoFocusReason?: boolean;
 }) {
   const { isPending, message, run } = useActionRefresh();
-  const [savedDraft] = useState<AdjustmentDraft | null>(() => (autoFocusReason ? null : readAdjustmentDraft()));
+  const [hasLoadedDraft, setHasLoadedDraft] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState<"MISSING_CHECK_IN" | "MISSING_CHECK_OUT">(
-    savedDraft?.adjustmentType === "MISSING_CHECK_OUT" ? "MISSING_CHECK_OUT" : defaultAdjustmentType
+    defaultAdjustmentType
   );
-  const [targetDate, setTargetDate] = useState(savedDraft?.targetDate || defaultDate);
+  const [targetDate, setTargetDate] = useState(defaultDate);
   const [requestedTime, setRequestedTime] = useState(
-    savedDraft?.requestedTime ||
-      defaultRequestedTime ||
+    defaultRequestedTime ||
       (defaultAdjustmentType === "MISSING_CHECK_IN" ? "09:00" : "18:00")
   );
-  const [reason, setReason] = useState(savedDraft?.reason || defaultReason);
+  const [reason, setReason] = useState(defaultReason);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(savedDraft?.updatedAt ?? null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -1856,6 +1855,35 @@ export function MissingClockAdjustmentForm({
   }, [autoFocusReason]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (autoFocusReason) {
+        setHasLoadedDraft(true);
+        return;
+      }
+
+      const savedDraft = readAdjustmentDraft();
+      if (savedDraft) {
+        setAdjustmentType(savedDraft.adjustmentType === "MISSING_CHECK_OUT" ? "MISSING_CHECK_OUT" : defaultAdjustmentType);
+        setTargetDate(savedDraft.targetDate || defaultDate);
+        setRequestedTime(
+          savedDraft.requestedTime ||
+            defaultRequestedTime ||
+            (defaultAdjustmentType === "MISSING_CHECK_IN" ? "09:00" : "18:00")
+        );
+        setReason(savedDraft.reason || defaultReason);
+        setDraftSavedAt(savedDraft.updatedAt ?? null);
+      }
+      setHasLoadedDraft(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [autoFocusReason, defaultAdjustmentType, defaultDate, defaultReason, defaultRequestedTime]);
+
+  useEffect(() => {
+    if (!hasLoadedDraft) {
+      return;
+    }
+
     const payload = {
       adjustmentType,
       targetDate,
@@ -1865,7 +1893,7 @@ export function MissingClockAdjustmentForm({
     } satisfies AdjustmentDraft;
 
     writeAdjustmentDraft(payload);
-  }, [adjustmentType, targetDate, requestedTime, reason]);
+  }, [adjustmentType, hasLoadedDraft, targetDate, requestedTime, reason]);
 
   function clearDraft() {
     writeAdjustmentDraft(null);
@@ -4304,7 +4332,7 @@ export function PwaInstallCard({
         </p>
       </div>
       {queueItems.length > 0 ? (
-        <div className="card">
+        <div id="field-queue-detail" className="card">
           <div className="actions-row" style={{ justifyContent: "space-between" }}>
             <strong>대기 중인 기록</strong>
             <span className="status-pill gray">{queueItems.length}건</span>

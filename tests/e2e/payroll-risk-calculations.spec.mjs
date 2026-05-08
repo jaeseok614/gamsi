@@ -42,6 +42,18 @@ function nextSunday(dateString) {
   return addDays(dateString, (7 - day) % 7);
 }
 
+function weekStart(dateString) {
+  const date = new Date(`${dateString}T12:00:00.000Z`);
+  const day = date.getUTCDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  return addDays(dateString, -daysFromMonday);
+}
+
+function currentWeekDates(count) {
+  const start = weekStart(kstDate());
+  return Array.from({ length: count }, (_, index) => addDays(start, index));
+}
+
 function recentWeekdayDates(count) {
   const today = kstDate();
   const dates = [];
@@ -282,6 +294,73 @@ test("반차와 시간차 승인 휴가가 급여 리포트의 연차 사용량�
   expect(row.annualLeaveUsedThisMonth).toBeCloseTo(0.75, 2);
 });
 
+test("휴게시간 경계값은 4시간 미만, 4시간 이상, 8시간 이상 기준으로 계산된다", async ({ request }) => {
+  const { user } = await createIsolatedCompanyUser("ADMIN", "break-boundary");
+  const adminCookie = await loginApi(request, user.email);
+  const month = "2026-03";
+  const cases = [
+    {
+      workDate: "2026-03-02",
+      grossMinutes: 239,
+      breakMinutes: 0,
+      expectedRequiredBreakMinutes: 0,
+      expectedRisk: false
+    },
+    {
+      workDate: "2026-03-03",
+      grossMinutes: 240,
+      breakMinutes: 30,
+      expectedRequiredBreakMinutes: 30,
+      expectedRisk: false
+    },
+    {
+      workDate: "2026-03-04",
+      grossMinutes: 479,
+      breakMinutes: 29,
+      expectedRequiredBreakMinutes: 30,
+      expectedRisk: true
+    },
+    {
+      workDate: "2026-03-05",
+      grossMinutes: 480,
+      breakMinutes: 59,
+      expectedRequiredBreakMinutes: 60,
+      expectedRisk: true
+    }
+  ];
+
+  for (const item of cases) {
+    await createClosedSession({
+      companyId: user.companyId,
+      userId: user.id,
+      workDate: item.workDate,
+      checkInAt: kstDateTime(item.workDate, 9, 0),
+      checkOutAt: kstDateTime(item.workDate, 9 + Math.floor(item.grossMinutes / 60), item.grossMinutes % 60),
+      grossMinutes: item.grossMinutes,
+      breakMinutes: item.breakMinutes,
+      calculatedWorkMinutes: item.grossMinutes - item.breakMinutes,
+      overtimeMinutes: 0,
+      approvedOvertimeMinutes: 0
+    });
+  }
+
+  const report = await requestJson(request, adminCookie, `/api/reports/monthly?month=${month}`);
+  const rowsByDate = new Map(
+    report.sessions
+      .filter((session) => session.user.email === user.email)
+      .map((session) => [session.workDate.slice(0, 10), session])
+  );
+  const riskDates = new Set(report.breakRiskRows.map((row) => row.workDate.slice(0, 10)));
+
+  for (const item of cases) {
+    const row = rowsByDate.get(item.workDate);
+    expect(row).toBeTruthy();
+    expect(row.requiredBreakMinutes).toBe(item.expectedRequiredBreakMinutes);
+    expect(row.hasBreakRisk).toBe(item.expectedRisk);
+    expect(riskDates.has(item.workDate)).toBe(item.expectedRisk);
+  }
+});
+
 test("월 마감 후 근태 데이터가 바뀌면 잠금 스냅샷과 라이브 리포트 차이를 표시한다", async ({ request }) => {
   const { company, user } = await createIsolatedCompanyUser("ADMIN", "close-diff");
   const adminCookie = await loginApi(request, user.email);
@@ -401,6 +480,71 @@ test("월 경계 야간근로는 근무일 월에만 반영된다", async ({ req
   expect(mayRow.nightWorkMinutes).toBe(0);
 });
 
+test("이번 주 48시간 근접과 52시간 도달은 서로 다른 주간 리스크 등급으로 표시된다", async ({ request }) => {
+  const { company, user: nearLimitUser } = await createIsolatedCompanyUser("ADMIN", "weekly-near");
+  const passwordHash = nearLimitUser.passwordHash;
+  const overLimitUser = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      name: "PW weekly over",
+      email: `pw-weekly-over-${Date.now()}@payroll.example`,
+      passwordHash,
+      role: "EMPLOYEE",
+      joinedAt: dateOnly("2024-01-01")
+    }
+  });
+  const adminCookie = await loginApi(request, nearLimitUser.email);
+  const dates = currentWeekDates(5);
+
+  for (const workDate of dates) {
+    await createClosedSession({
+      companyId: company.id,
+      userId: nearLimitUser.id,
+      workDate,
+      checkInAt: kstDateTime(workDate, 9, 0),
+      checkOutAt: kstDateTime(workDate, 19, 36),
+      grossMinutes: 636,
+      breakMinutes: 60,
+      calculatedWorkMinutes: 576,
+      overtimeMinutes: 96,
+      approvedOvertimeMinutes: 96
+    });
+    await createClosedSession({
+      companyId: company.id,
+      userId: overLimitUser.id,
+      workDate,
+      checkInAt: kstDateTime(workDate, 9, 0),
+      checkOutAt: kstDateTime(workDate, 20, 24),
+      grossMinutes: 684,
+      breakMinutes: 60,
+      calculatedWorkMinutes: 624,
+      overtimeMinutes: 144,
+      approvedOvertimeMinutes: 144
+    });
+  }
+
+  await requestJson(request, adminCookie, "/api/risks/recalculate", "POST", {});
+
+  const risks = await prisma.riskSignal.findMany({
+    where: {
+      companyId: company.id,
+      type: "WEEKLY_LIMIT",
+      userId: {
+        in: [nearLimitUser.id, overLimitUser.id]
+      }
+    }
+  });
+  const nearRisk = risks.find((risk) => risk.userId === nearLimitUser.id);
+  const overRisk = risks.find((risk) => risk.userId === overLimitUser.id);
+
+  expect(nearRisk).toBeTruthy();
+  expect(nearRisk.level).toBe("HIGH");
+  expect(nearRisk.evidence.weeklyMinutes).toBe(48 * 60);
+  expect(overRisk).toBeTruthy();
+  expect(overRisk.level).toBe("CRITICAL");
+  expect(overRisk.evidence.weeklyMinutes).toBe(52 * 60);
+});
+
 test("수동 공휴일은 휴일 가산에 반영하고 토요일은 정책에 따라 제외한다", async ({ request }) => {
   const { company, user } = await createIsolatedCompanyUser("ADMIN", "manual-holiday");
   const adminCookie = await loginApi(request, user.email);
@@ -453,6 +597,59 @@ test("수동 공휴일은 휴일 가산에 반영하고 토요일은 정책에 �
   expect(row.additionalHolidayPremiumMinutes).toBe(120);
   expect(row.calculatedWorkMinutes).toBe(480);
   expect(row.payableEquivalentMinutes).toBe(600);
+});
+
+test("출퇴근 누락 정정 대기건은 월마감 blocker로 잡히고 승인 후 해소된다", async ({ request }) => {
+  const { company, user } = await createIsolatedCompanyUser("ADMIN", "adjustment-blocker");
+  const adminCookie = await loginApi(request, user.email);
+  const month = "2026-07";
+  const adjustment = await prisma.approvalRequest.create({
+    data: {
+      companyId: company.id,
+      requesterId: user.id,
+      type: "ADJUSTMENT",
+      adjustmentType: "MISSING_CHECK_IN",
+      targetDate: dateOnly(`${month}-08`),
+      requestedAt: kstDateTime(`${month}-08`, 9, 0),
+      reason: "Playwright missing check-in blocker"
+    }
+  });
+
+  const blockedReport = await requestJson(request, adminCookie, `/api/reports/payroll?month=${month}`);
+  expect(blockedReport.canClose).toBeFalsy();
+  expect(blockedReport.blockingSummary.pendingAdjustmentApprovals).toBe(1);
+  expect(blockedReport.blockerDrillDown.pendingApprovals.some((item) => item.id === adjustment.id)).toBeTruthy();
+  const blockedClose = await request.fetch("/api/reports/month-close", {
+    method: "POST",
+    headers: {
+      cookie: adminCookie,
+      "content-type": "application/json"
+    },
+    data: {
+      month,
+      reason: "should be blocked"
+    }
+  });
+  expect(blockedClose.status()).toBe(400);
+
+  await prisma.approvalRequest.update({
+    where: {
+      id: adjustment.id
+    },
+    data: {
+      status: "APPROVED",
+      reviewedAt: new Date()
+    }
+  });
+
+  const clearReport = await requestJson(request, adminCookie, `/api/reports/payroll?month=${month}`);
+  expect(clearReport.blockingSummary.pendingAdjustmentApprovals).toBe(0);
+  expect(clearReport.canClose).toBeTruthy();
+  const closed = await requestJson(request, adminCookie, "/api/reports/month-close", "POST", {
+    month,
+    reason: "Playwright blocker cleared"
+  });
+  expect(closed.status).toBe("CLOSED");
 });
 
 test("리스크 재계산이 미승인 초과근로, 포괄임금, 휴게, 스케줄, 야간/휴일 위험을 만든다", async ({ request }) => {
