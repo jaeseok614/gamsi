@@ -9,7 +9,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     services:
       postgres:
@@ -29,6 +29,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://gamsi:gamsi@localhost:5432/gamsi?schema=public
       AUTH_SECRET: ci-only-secret-change-in-production-32chars
+      AUTH_COOKIE_SECURE: "false"
       APP_BASE_URL: http://localhost:3000
       SMTP_HOST: ""
       SMTP_PORT: "587"
@@ -45,6 +46,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify secrets are not tracked
+        run: |
+          tracked="$(git ls-files .env .env.local .env.production .env.staging)"
+          if [ -n "$tracked" ]; then
+            echo "Secret env files are tracked:"
+            echo "$tracked"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

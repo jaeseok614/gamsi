@@ -1,22 +1,22 @@
 # WorkGuard Next Steps
 
-## Later: GitHub, Domain, and VPS Deployment
+## GitHub Status
 
-These tasks are intentionally deferred until the GitHub account/repository name, production domain, and VPS target are decided.
+Completed:
 
-- Decide GitHub account or organization name.
-- Create the GitHub repository.
-- Connect the local repository:
+- GitHub repository created: `jaeseok614/gamsi`.
+- Local repository connected to `git@github.com:jaeseok614/gamsi.git`.
+- `main` is tracking `origin/main`.
+- GitHub Actions CI is configured in `.github/workflows/ci.yml`.
 
-```bash
-git remote add origin <github-repo-url>
-git push -u origin main
-```
+Recommended repository settings are tracked in [GITHUB_SETUP.md](GITHUB_SETUP.md).
 
-- Confirm GitHub Actions CI runs on `main`.
+## Domain and VPS Deployment
+
 - Decide production domain and configure HTTPS.
 - Prepare production `.env` from `.env.production.example`.
-- Provision or choose the Docker VPS.
+- Provision the Docker VPS.
+- Configure VPS SSH access for the deploy user.
 - Run the VPS deploy command from `docs/DEPLOYMENT.md`.
 - Run production rehearsal:
 

@@ -9,8 +9,10 @@
 - `npm run db:push`로 Prisma 스키마를 운영 DB에 반영한다.
 - `DATABASE_URL`, `APP_BASE_URL`, `AUTH_SECRET`은 운영 값이어야 한다.
 - `AUTH_SECRET`은 기본값이 아니고 32자 이상 무작위 문자열이어야 한다.
+- HTTPS 운영 환경은 `AUTH_COOKIE_SECURE=true`여야 한다.
 - `/api/health`는 외부 로드밸런서용으로 사용하고, 상세 원인은 관리자 `/api/admin/ops/status`에서 확인한다.
 - 첫 Docker VPS 배포 절차는 [DEPLOYMENT.md](DEPLOYMENT.md)를 기준으로 한다.
+- GitHub branch protection과 secrets 운영 기준은 [GITHUB_SETUP.md](GITHUB_SETUP.md)를 기준으로 한다.
 
 ## 권장 점검
 

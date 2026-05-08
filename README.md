@@ -2,17 +2,30 @@
 
 워크가드는 한국형 노무 리스크 관리 SaaS MVP입니다. 직원 감시가 아니라 근로시간 기록, 초과근로 승인, 리스크 신호, 감사 로그, HR 리포트 흐름을 검증하는 웹앱입니다.
 
+## Requirements
+
+- Node.js 22
+- Docker Desktop or Docker Engine with Compose
+- Git
+
 ## Local Setup
 
+처음 받은 환경에서는 예시 env를 복사한 뒤 로컬 DB와 앱을 실행합니다.
+
 ```bash
-npm install
+cp .env.example .env
+npm ci
 docker compose up -d db
 npm run db:push
 npm run db:seed
 npm run dev
 ```
 
-Docker로 앱까지 한 번에 확인하려면 아래 명령을 사용합니다. 새 DB 볼륨이면 스키마 반영 후 데모 데이터를 자동으로 넣고, 기존 데이터가 있으면 seed를 건너뜁니다.
+앱은 기본적으로 `http://localhost:3000`에서 실행됩니다. 이미 사용 중인 포트가 있으면 Next.js가 다른 포트를 안내합니다. 첫 화면은 워크가드 랜딩페이지이며, `/login`에서 데모 계정으로 앱에 진입합니다.
+
+## Docker Run
+
+Docker로 DB와 앱까지 한 번에 확인하려면 아래 명령을 사용합니다. 새 DB 볼륨이면 스키마 반영 후 데모 데이터를 자동으로 넣고, 기존 데이터가 있으면 seed를 건너뜁니다.
 
 ```bash
 docker compose --profile app up -d app
@@ -20,13 +33,40 @@ docker compose --profile app up -d app
 
 호스트 3000번 포트가 이미 사용 중이면 `APP_PORT=3006 docker compose --profile app up -d app`처럼 바꿔서 실행할 수 있습니다.
 
-Playwright E2E는 브라우저와 네트워크 제약을 피하도록 전용 Docker 프로필로 고정했습니다.
+로컬 Docker HTTP 실행은 `.env.example`처럼 `AUTH_COOKIE_SECURE=false`를 사용합니다. 운영 HTTPS 배포에서는 `.env.production.example`처럼 반드시 `AUTH_COOKIE_SECURE=true`를 사용합니다.
+
+## Verification
+
+기본 검증은 아래 순서로 실행합니다.
 
 ```bash
-npm run qa:e2e:docker
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-앱은 기본적으로 `http://localhost:3000`에서 실행됩니다. 이미 사용 중인 포트가 있으면 Next.js가 다른 포트를 안내합니다. 첫 화면은 워크가드 랜딩페이지이며, `/login`에서 데모 계정으로 앱에 진입합니다.
+Playwright E2E는 브라우저와 네트워크 제약을 피하도록 전용 Docker 프로필로 고정했습니다. 3000번 포트가 이미 사용 중이면 `APP_PORT`를 지정합니다.
+
+```bash
+APP_PORT=3006 npm run qa:e2e:docker
+```
+
+최종 확인된 기준은 `typecheck`, `lint`, `build`, Docker Playwright E2E `30 passed`입니다.
+
+## GitHub CI
+
+`main`에 push하거나 pull request를 열면 GitHub Actions `CI`가 실행됩니다.
+
+- tracked secret env 파일 차단
+- `npm ci`
+- Prisma DB push/seed
+- `npm run typecheck`
+- `npm run lint`
+- `npm run build`
+- smoke QA
+- Playwright E2E
+
+현재 CI는 테스트용 VAPID 키를 런타임에 생성하므로 GitHub Actions secrets가 필요 없습니다. 운영 배포 secrets는 [docs/GITHUB_SETUP.md](docs/GITHUB_SETUP.md)에 따로 정리했습니다.
 
 ## Demo Accounts
 
@@ -37,6 +77,19 @@ npm run qa:e2e:docker
 - `manager@gamsi.kr` - 팀장
 - `employee@gamsi.kr` - 직원
 - `field@gamsi.kr` - 현장 직원
+
+## Deployment Prep
+
+첫 배포 경로는 Docker VPS로 정했습니다. 운영 환경 변수는 `.env.production.example`을 기준으로 준비합니다.
+
+필수 값:
+
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `AUTH_COOKIE_SECURE=true`
+- `APP_BASE_URL=https://your-domain.example`
+
+배포 절차와 리허설 명령은 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)에 정리되어 있습니다.
 
 ## Product Boundaries
 

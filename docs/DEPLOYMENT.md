@@ -4,6 +4,7 @@ This runbook is the source of truth for the first production deployment path. It
 
 ## 1. Repository and CI
 
+- GitHub repository: `jaeseok614/gamsi`
 - Keep `main` protected and require the `CI` workflow before merging.
 - CI runs `npm ci`, Prisma DB push/seed against a PostgreSQL service, `typecheck`, `lint`, production `build`, smoke QA, and Playwright E2E.
 - Generated files, local secrets, backups, Playwright artifacts, and uploaded evidence are ignored by Git.
@@ -85,15 +86,15 @@ The rehearsal verifies required environment variables, backup tools, typecheck/l
 
 ## 6. VPS Deploy Command
 
-This step is deferred until the GitHub repository, production domain, and VPS target are decided. The pending checklist is tracked in [NEXT_STEPS.md](NEXT_STEPS.md).
+The selected first deployment path is a Docker VPS running PostgreSQL and the Next.js app behind HTTPS.
 
-After the GitHub repository exists and the VPS has Docker, Docker Compose, Git, and SSH access configured:
+After the VPS has Docker, Docker Compose, Git, and SSH access configured:
 
 ```bash
 DEPLOY_HOST="1.2.3.4" \
 DEPLOY_USER="deploy" \
 DEPLOY_PATH="/opt/workguard" \
-DEPLOY_REPO="git@github.com:your-org/workguard.git" \
+DEPLOY_REPO="git@github.com:jaeseok614/gamsi.git" \
 DEPLOY_BRANCH="main" \
 DEPLOY_ENV_FILE=".env.production" \
 npm run ops:deploy-vps

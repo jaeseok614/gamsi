@@ -1,0 +1,27 @@
+name: Task
+description: Track implementation, deployment, or operations work.
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Target Outcome
+      description: What should be true when this task is done?
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Checklist
+      placeholder: |
+        - [ ] Update code or docs
+        - [ ] Run validation
+        - [ ] Update release notes if needed
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Links, constraints, or deployment details.
