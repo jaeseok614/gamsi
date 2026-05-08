@@ -382,6 +382,92 @@ export function GroupwarePanel({
       href: searchHref({ type: "DOCUMENT", from: weekStart })
     }
   ];
+  const overviewBoardRows = [
+    ...noticeAnnouncements.slice(0, 5).map((announcement) => {
+      const statusLabel = !announcement.isPublished
+        ? "예약"
+        : announcement.isExpired
+          ? "만료"
+          : announcement.isReadByViewer
+            ? "읽음"
+            : "미확인";
+      const tone = !announcement.isPublished || (!announcement.isReadByViewer && !announcement.isExpired)
+        ? "yellow"
+        : announcement.isExpired
+          ? "red"
+          : "gray";
+      return {
+        id: `notice-${announcement.id}`,
+        area: "공지사항",
+        title: announcement.title,
+        href: `${groupwareHref({ tab: "announcements", announcementId: announcement.id, noticeFilter: normalizedNoticeFilter })}#groupware-announcements`,
+        statusLabel,
+        tone,
+        owner: announcement.author.name,
+        meta: `${announcementCategoryLabel(announcement.category)} · 읽음 ${announcement.readStats.readCount}/${announcement.readStats.recipientCount}명`,
+        createdAt: announcement.publishAt ?? announcement.createdAt
+      };
+    }),
+    ...boardAnnouncements.slice(0, 4).map((announcement) => ({
+      id: `board-${announcement.id}`,
+      area: "게시판",
+      title: announcement.title,
+      href: `${groupwareHref({ tab: "announcements", announcementId: announcement.id })}#groupware-board`,
+      statusLabel: announcement.isReadByViewer ? "읽음" : "미확인",
+      tone: announcement.isReadByViewer ? "gray" : "yellow",
+      owner: announcement.author.name,
+      meta: `${announcement.comments.length}댓글 · 첨부 ${announcement.attachments.length}개`,
+      createdAt: announcement.publishAt ?? announcement.createdAt
+    })),
+    ...groupware.documentRequests.slice(0, 5).map((document) => ({
+      id: `document-${document.id}`,
+      area: "전자결재",
+      title: `${document.documentNumber ?? "문서번호 미정"} · ${document.title}`,
+      href: documentHref(document.id),
+      statusLabel: documentStatusLabel(document.status),
+      tone: documentStatusTone(document.status),
+      owner: document.reviewer?.name ?? document.requester.name,
+      meta: `${documentCategoryLabel(document.category)} · 요청 ${document.requester.name}`,
+      createdAt: document.createdAt
+    })),
+    ...groupware.libraryItems.slice(0, 4).map((item) => ({
+      id: `library-${item.id}`,
+      area: "자료실",
+      title: item.title,
+      href: libraryHref(item.id),
+      statusLabel: item.isArchived ? "보관" : item.isPinned ? "중요" : "사용 중",
+      tone: item.isArchived ? "gray" : item.isPinned ? "yellow" : "green",
+      owner: item.createdBy.name,
+      meta: `${libraryCategoryLabel(item.category)} · v${item.versions[0]?.versionNo ?? 1} · 다운로드 ${item.downloadCount}회`,
+      createdAt: item.updatedAt
+    })),
+    ...groupware.payrollIssues.slice(0, 4).map((issue) => ({
+      id: `payroll-${issue.id}`,
+      area: "급여·운영",
+      title: `${issue.month} · ${issue.user.name}`,
+      href: `${groupwareHref({ tab: "operations", userId: issue.userId })}#groupware-payroll-statements`,
+      statusLabel: payrollStatementStatusLabel(issue.status),
+      tone: issue.status === "LOCKED" ? "yellow" : "green",
+      owner: issue.issuedBy?.name ?? "-",
+      meta: "급여명세",
+      createdAt: issue.issuedAt
+    })),
+    ...openProfileMemos.slice(0, 4).map((thread) => ({
+      id: `memo-${thread.id}`,
+      area: "직원 메모",
+      title: thread.title,
+      href: thread.href,
+      statusLabel: workThreadStatusLabel(thread.status),
+      tone: workThreadStatusTone(thread.status),
+      owner: thread.assignee?.name ?? "미지정",
+      meta: thread.targetUser?.name ?? "대상 없음",
+      createdAt: thread.lastCommentAt ?? thread.updatedAt
+    }))
+  ]
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .slice(0, 14);
+  const documentListRows = groupware.documentRequests.filter((document) => document.id !== selectedDocument?.id);
+  const libraryListRows = filteredLibraryItems.filter((item) => item.id !== selectedLibraryItem?.id);
   const attachmentLinks = (
     attachments: Array<{ id: string; originalName: string; mimeType: string }>,
     basePath: string
@@ -522,6 +608,85 @@ export function GroupwarePanel({
           </div>
           );
         })}
+      </div>
+    ) : (
+      <div className="empty">{emptyMessage}</div>
+    );
+  const announcementTable = (items: typeof groupware.announcements, emptyMessage: string) =>
+    items.length > 0 ? (
+      <div className="table-wrap groupware-board-table">
+        <table>
+          <thead>
+            <tr>
+              <th>제목</th>
+              <th>분류/대상</th>
+              <th>작성자</th>
+              <th>읽음/참여</th>
+              <th>등록일</th>
+              <th>동작</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((announcement) => {
+              const isBoardAnnouncement = announcement.category === "TEAM";
+              const announcementAnchor = isBoardAnnouncement ? "groupware-board" : "groupware-announcements";
+              const detailHref = `${groupwareHref({
+                tab: "announcements",
+                announcementId: announcement.id,
+                noticeFilter: isBoardAnnouncement ? undefined : normalizedNoticeFilter
+              })}#${announcementAnchor}`;
+              const publishTime = announcement.publishAt ?? announcement.createdAt;
+              const statusLabel = !announcement.isPublished
+                ? "예약"
+                : announcement.isExpired
+                  ? "만료"
+                  : announcement.isReadByViewer
+                    ? "읽음"
+                    : "미확인";
+              const statusTone = !announcement.isPublished || (!announcement.isReadByViewer && !announcement.isExpired)
+                ? "yellow"
+                : announcement.isExpired
+                  ? "red"
+                  : "gray";
+              return (
+                <tr id={`groupware-announcement-${announcement.id}`} key={announcement.id}>
+                  <td>
+                    <div className="groupware-row-title">
+                      <Link href={detailHref}>{announcement.title}</Link>
+                      <span className="groupware-table-meta">{announcement.body}</span>
+                      <div className="actions-row groupware-row-badges">
+                        {announcement.isPinned ? <span className="status-pill yellow">고정</span> : null}
+                        {announcement.attachments.length > 0 ? <span className="status-pill gray">첨부 {announcement.attachments.length}</span> : null}
+                        {announcement.allowComments ? <span className="status-pill gray">댓글 허용</span> : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="status-pill gray">{announcementCategoryLabel(announcement.category)}</span>
+                    <br />
+                    <span className="muted">{announcement.audience === "TEAM" ? announcement.team?.name ?? "팀" : "전체"}</span>
+                  </td>
+                  <td>{announcement.author.name}</td>
+                  <td>
+                    <span className={`status-pill ${statusTone}`}>{statusLabel}</span>
+                    <p className="muted groupware-table-meta">
+                      읽음 {announcement.readStats.readCount}/{announcement.readStats.recipientCount}명 · 댓글 {announcement.comments.length}개
+                    </p>
+                  </td>
+                  <td>{formatKstDateTime(publishTime)}</td>
+                  <td>
+                    <div className="actions-row groupware-row-actions">
+                      <Link className="button secondary" href={detailHref}>
+                        상세
+                      </Link>
+                      <AnnouncementReadButton announcementId={announcement.id} isRead={announcement.isReadByViewer} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     ) : (
       <div className="empty">{emptyMessage}</div>
@@ -769,71 +934,69 @@ export function GroupwarePanel({
         ) : null}
       </form>
 
-          <div className="grid-3">
-            <div className="panel stack">
-              <div className="actions-row" style={{ justifyContent: "space-between" }}>
-                <h2 style={{ margin: 0 }}>공지사항</h2>
-                <Link className="status-pill gray" href={groupwareTabHref("announcements")}>
-                  열기
-                </Link>
+          <div className="panel stack groupware-overview-hub">
+            <div className="actions-row" style={{ justifyContent: "space-between" }}>
+              <div>
+                <h2 style={{ margin: 0 }}>그룹웨어 게시판 허브</h2>
+                <p className="muted" style={{ margin: "6px 0 0" }}>
+                  공지, 게시글, 결재, 자료, 급여, 메모를 최근 항목 기준으로 모아 봅니다.
+                </p>
               </div>
-              {noticeAnnouncements.slice(0, 3).map((announcement) => (
-                <Link
-                  className="notification-card read"
-                  href={`${groupwareHref({ tab: "announcements", announcementId: announcement.id })}#groupware-announcements`}
-                  key={announcement.id}
-                  style={{ textDecoration: "none" }}
-                >
-                  <div>
-                    <strong>{announcement.title}</strong>
-                    <p className="muted" style={{ margin: "6px 0 0" }}>
-                      {announcement.author.name} · {formatKstDateTime(announcement.publishAt ?? announcement.createdAt)}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-              {noticeAnnouncements.length === 0 ? <div className="empty">확인할 공지가 없습니다.</div> : null}
+              <span className="status-pill gray">{overviewBoardRows.length}건</span>
             </div>
-
-            <div className="panel stack">
-              <div className="actions-row" style={{ justifyContent: "space-between" }}>
-                <h2 style={{ margin: 0 }}>전자결재</h2>
-                <Link className="status-pill gray" href={groupwareTabHref("documents")}>
-                  열기
-                </Link>
+            <div className="groupware-hub-shortcuts">
+              <Link href={groupwareTabHref("announcements")}>
+                공지/게시판 <span>{noticeAnnouncements.length + boardAnnouncements.length}</span>
+              </Link>
+              <Link href={groupwareTabHref("documents")}>
+                전자결재 <span>{groupware.documentRequests.length}</span>
+              </Link>
+              <Link href={groupwareTabHref("library")}>
+                자료실 <span>{groupware.libraryItems.length}</span>
+              </Link>
+              <Link href={groupwareTabHref("operations")}>
+                급여·운영 <span>{groupware.payrollIssues.length + openProfileMemos.length}</span>
+              </Link>
+            </div>
+            {overviewBoardRows.length > 0 ? (
+              <div className="table-wrap groupware-board-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>영역</th>
+                      <th>제목</th>
+                      <th>상태</th>
+                      <th>담당/작성자</th>
+                      <th>날짜</th>
+                      <th>이동</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overviewBoardRows.map((row) => (
+                      <tr key={row.id}>
+                        <td><span className="status-pill gray">{row.area}</span></td>
+                        <td>
+                          <div className="groupware-row-title">
+                            <Link href={row.href}>{row.title}</Link>
+                            <span className="groupware-table-meta">{row.meta}</span>
+                          </div>
+                        </td>
+                        <td><span className={`status-pill ${row.tone}`}>{row.statusLabel}</span></td>
+                        <td>{row.owner}</td>
+                        <td>{formatKstDateTime(row.createdAt)}</td>
+                        <td>
+                          <Link className="button secondary" href={row.href}>
+                            열기
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {pendingDocuments.slice(0, 3).map((document) => (
-                <Link className="notification-card read" href={documentHref(document.id)} key={document.id} style={{ textDecoration: "none" }}>
-                  <div>
-                    <strong>{document.documentNumber ?? "문서번호 미정"} · {document.title}</strong>
-                    <p className="muted" style={{ margin: "6px 0 0" }}>
-                      요청 {document.requester.name} · 현재 결재 {document.reviewer?.name ?? "미지정"}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-              {pendingDocuments.length === 0 ? <div className="empty">대기 중인 전자결재가 없습니다.</div> : null}
-            </div>
-
-            <div className="panel stack">
-              <div className="actions-row" style={{ justifyContent: "space-between" }}>
-                <h2 style={{ margin: 0 }}>자료실</h2>
-                <Link className="status-pill gray" href={groupwareTabHref("library")}>
-                  열기
-                </Link>
-              </div>
-              {groupware.libraryItems.slice(0, 3).map((item) => (
-                <Link className="notification-card read" href={libraryHref(item.id)} key={item.id} style={{ textDecoration: "none" }}>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p className="muted" style={{ margin: "6px 0 0" }}>
-                      {libraryCategoryLabel(item.category)} · v{item.versions[0]?.versionNo ?? 1}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-              {groupware.libraryItems.length === 0 ? <div className="empty">등록된 자료가 없습니다.</div> : null}
-            </div>
+            ) : (
+              <div className="empty">아직 표시할 그룹웨어 항목이 없습니다.</div>
+            )}
           </div>
 
         </>
@@ -933,7 +1096,7 @@ export function GroupwarePanel({
             {selectedAnnouncementId && !selectedAnnouncement && activeTab === "announcements" ? (
               <div className="empty">선택한 공지사항을 찾을 수 없거나 접근 권한이 없습니다.</div>
             ) : null}
-            {announcementCards(
+            {announcementTable(
               noticeAnnouncements.filter((announcement) => announcement.id !== activeSelectedNotice?.id),
               "등록된 공지사항이 없습니다."
             )}
@@ -955,7 +1118,7 @@ export function GroupwarePanel({
               <AnnouncementForm teams={organization.selectableTeams} mode="board" canManage={groupware.canManageGroupware} />
             </div>
             {activeSelectedBoardPost ? announcementCards([activeSelectedBoardPost], "선택한 게시글을 찾을 수 없습니다.", "detail") : null}
-            {announcementCards(
+            {announcementTable(
               boardAnnouncements.filter((announcement) => announcement.id !== activeSelectedBoardPost?.id),
               "등록된 게시글이 없습니다."
             )}
@@ -1155,25 +1318,48 @@ export function GroupwarePanel({
               </div>
             ) : null}
             {groupware.payrollIssues.length > 0 ? (
-              <div className="stack" style={{ gap: 8 }}>
-                {groupware.payrollIssues.slice(0, 6).map((issue) => (
-                  <div className="notification-card read" key={issue.id}>
-                    <div>
-                      <strong>{issue.month} · {issue.user.name}</strong>
-                      <p className="muted" style={{ margin: "6px 0 0" }}>
-                        {payrollStatementStatusLabel(issue.status)} · {issue.issuedBy?.name ?? "-"} · {formatKstDateTime(issue.issuedAt)}
-                      </p>
-                    </div>
-                    <div className="actions-row">
-                      <a className="button secondary" href={payrollStatementHref(issue.month, "pdf", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
-                        PDF
-                      </a>
-                      <a className="button secondary" href={payrollStatementHref(issue.month, "csv", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
-                        CSV
-                      </a>
-                    </div>
-                  </div>
-                ))}
+              <div className="table-wrap groupware-board-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>월</th>
+                      <th>대상자</th>
+                      <th>상태</th>
+                      <th>발행자</th>
+                      <th>발행일</th>
+                      <th>동작</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupware.payrollIssues.slice(0, 12).map((issue) => (
+                      <tr key={issue.id}>
+                        <td><strong>{issue.month}</strong></td>
+                        <td>
+                          {issue.user.name}
+                          <br />
+                          <span className="muted">{issue.user.team?.name ?? "소속 없음"}</span>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${issue.status === "LOCKED" ? "yellow" : "green"}`}>
+                            {payrollStatementStatusLabel(issue.status)}
+                          </span>
+                        </td>
+                        <td>{issue.issuedBy?.name ?? "-"}</td>
+                        <td>{formatKstDateTime(issue.issuedAt)}</td>
+                        <td>
+                          <div className="actions-row groupware-row-actions">
+                            <a className="button secondary" href={payrollStatementHref(issue.month, "pdf", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
+                              PDF
+                            </a>
+                            <a className="button secondary" href={payrollStatementHref(issue.month, "csv", groupware.canViewPayrollForOthers ? issue.userId : undefined)}>
+                              CSV
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : null}
             {groupware.canViewPayrollForOthers ? (
@@ -1305,58 +1491,78 @@ export function GroupwarePanel({
             ) : selectedDocumentId ? (
               <div className="empty">선택한 전자결재 문서를 찾을 수 없거나 접근 권한이 없습니다.</div>
             ) : null}
-            {groupware.documentRequests.length > 0 ? (
-              <div className="stack" style={{ gap: 8 }}>
-                {groupware.documentRequests.filter((document) => document.id !== selectedDocument?.id).map((document) => (
-                  <div className="notification-card read" key={document.id}>
-                    <div>
-                      <div className="actions-row">
-                        <strong>{document.documentNumber ?? "문서번호 미정"} · {document.title}</strong>
-                        <span className={`status-pill ${documentStatusTone(document.status)}`}>
-                          {documentStatusLabel(document.status)}
-                        </span>
-                      </div>
-                      <p className="muted" style={{ margin: "6px 0 0" }}>
-                        {documentCategoryLabel(document.category)} · 요청 {document.requester.name} · 현재 결재 {document.reviewer?.name ?? "미지정"}
-                      </p>
-                      <p className="muted" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{document.body}</p>
-                      <div className="actions-row" style={{ marginTop: 8 }}>
-                        {document.approvalSteps.map((step) => (
-                          <span className={`status-pill ${step.status === "APPROVED" ? "green" : step.status === "REJECTED" ? "red" : "yellow"}`} key={step.id}>
-                            {step.label}: {step.approver?.name ?? "-"}
+            {documentListRows.length > 0 ? (
+              <div className="table-wrap groupware-board-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>문서</th>
+                      <th>상태</th>
+                      <th>요청/결재</th>
+                      <th>결재선</th>
+                      <th>등록일</th>
+                      <th>동작</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {documentListRows.map((document) => (
+                      <tr key={document.id}>
+                        <td>
+                          <div className="groupware-row-title">
+                            <Link href={documentHref(document.id)}>
+                              {document.documentNumber ?? "문서번호 미정"} · {document.title}
+                            </Link>
+                            <span className="groupware-table-meta">{document.body}</span>
+                            <div className="actions-row groupware-row-badges">
+                              <span className="status-pill gray">{documentCategoryLabel(document.category)}</span>
+                              {document.attachments.length > 0 ? <span className="status-pill gray">첨부 {document.attachments.length}</span> : null}
+                              {document.workThread ? <span className="status-pill gray">댓글 {document.workThread._count.comments}</span> : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${documentStatusTone(document.status)}`}>
+                            {documentStatusLabel(document.status)}
                           </span>
-                        ))}
-                      </div>
-                      {document.attachments.length > 0 ? (
-                        attachmentLinks(document.attachments, "/api/groupware/document-attachments")
-                      ) : null}
-                      <div className="actions-row" style={{ marginTop: 8 }}>
-                        <Link className="button secondary" href={documentHref(document.id)}>
-                          상세
-                        </Link>
-                        <a className="button secondary" href={`/api/groupware/document-requests/${document.id}/pdf`}>
-                          <Download size={14} />
-                          PDF
-                        </a>
-                        {document.workThread ? (
-                          <Link className="button secondary" href={`/dashboard?view=workbox&workThreadId=${document.workThread.id}`}>
-                            댓글 {document.workThread._count.comments}개
-                          </Link>
-                        ) : null}
-                        {document.requester.id === viewerId && document.status === "REJECTED" ? (
-                          <DocumentResubmitButton documentId={document.id} />
-                        ) : null}
-                      </div>
-                    </div>
-                    {groupware.canManageGroupware && document.status === "PENDING" ? (
-                      <DocumentReviewButtons
-                        documentId={document.id}
-                        reviewers={assignableUsers}
-                        currentReviewerId={document.reviewer?.id}
-                      />
-                    ) : null}
-                  </div>
-                ))}
+                        </td>
+                        <td>
+                          <strong>{document.requester.name}</strong>
+                          <br />
+                          <span className="muted">현재 {document.reviewer?.name ?? "미지정"}</span>
+                        </td>
+                        <td>
+                          <div className="actions-row groupware-row-badges">
+                            {document.approvalSteps.map((step) => (
+                              <span className={`status-pill ${step.status === "APPROVED" ? "green" : step.status === "REJECTED" ? "red" : "yellow"}`} key={step.id}>
+                                {step.label}: {step.approver?.name ?? "-"}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td>{formatKstDateTime(document.createdAt)}</td>
+                        <td>
+                          <div className="actions-row groupware-row-actions">
+                            <Link className="button secondary" href={documentHref(document.id)}>
+                              상세
+                            </Link>
+                            <a className="button secondary" href={`/api/groupware/document-requests/${document.id}/pdf`}>
+                              <Download size={14} />
+                              PDF
+                            </a>
+                            {document.workThread ? (
+                              <Link className="button secondary" href={`/dashboard?view=workbox&workThreadId=${document.workThread.id}`}>
+                                댓글
+                              </Link>
+                            ) : null}
+                            {document.requester.id === viewerId && document.status === "REJECTED" ? (
+                              <DocumentResubmitButton documentId={document.id} />
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="empty">전자결재 문서가 없습니다.</div>
@@ -1574,78 +1780,81 @@ export function GroupwarePanel({
             ) : selectedLibraryItemId ? (
               <div className="empty">선택한 자료를 찾을 수 없거나 접근 권한이 없습니다.</div>
             ) : null}
-            {filteredLibraryItems.length > 0 ? (
-              <div className="stack" style={{ gap: 8 }}>
-                {filteredLibraryItems.filter((item) => item.id !== selectedLibraryItem?.id).map((item) => (
-                  <div id={`groupware-library-item-${item.id}`} className="notification-card read groupware-card" key={item.id}>
-                    <div className="groupware-card-main">
-                      <div className="actions-row groupware-card-title">
-                        <strong>{item.title}</strong>
-                        {item.isPinned ? <span className="status-pill yellow">중요</span> : null}
-                        <span className="status-pill gray">{libraryCategoryLabel(item.category)}</span>
-                        <span className="status-pill gray">{libraryScopeLabel(item.accessScope)}</span>
-                        {item.team ? <span className="status-pill gray">{item.team.name}</span> : null}
-                        <span className="status-pill gray">다운로드 {item.downloadCount}회</span>
-                      </div>
-                      {item.description ? (
-                        <p className="muted" style={{ margin: "6px 0 0" }}>{item.description}</p>
-                      ) : null}
-                      {groupware.canManageGroupware ? (
-                        <p className="muted" style={{ margin: "6px 0 0" }}>
-                          접근 가능 {item.accessPreview.totalCount}명
-                          {item.permissionTest ? ` · ${item.permissionTest.user.name}: ${item.permissionTest.canAccess ? "접근 가능" : "접근 불가"}` : ""}
-                        </p>
-                      ) : null}
-                      {groupware.canManageGroupware ? (
-                        <div className="actions-row" style={{ marginTop: 8 }}>
-                          <DocumentLibraryManageActions
-                            item={{
-                              id: item.id,
-                              title: item.title,
-                              category: item.category,
-                              accessScope: item.accessScope,
-                              teamId: item.teamId,
-                              description: item.description,
-                              isPinned: item.isPinned,
-                              isArchived: item.isArchived,
-                              versions: item.versions.map((version) => ({
-                                id: version.id,
-                                versionNo: version.versionNo,
-                                originalName: version.originalName,
-                                isHidden: version.isHidden
-                              }))
-                            }}
-                            teams={organization.selectableTeams}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="actions-row groupware-card-actions">
-                        <Link className="button secondary" href={libraryHref(item.id)}>
-                          상세
-                        </Link>
-                      </div>
-                      <div className="stack" style={{ gap: 6, marginTop: 8 }}>
-                        {item.versions.map((version) => (
-                          <div className="actions-row groupware-version-row" key={version.id}>
-                            {canPreviewAttachment(version) ? (
-                              <a className="button secondary" href={`/api/groupware/library/versions/${version.id}?preview=1`} target="_blank" rel="noreferrer">
-                                미리보기
-                              </a>
+            {libraryListRows.length > 0 ? (
+              <div className="table-wrap groupware-board-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>자료</th>
+                      <th>분류/권한</th>
+                      <th>버전</th>
+                      <th>다운로드</th>
+                      <th>업데이트</th>
+                      <th>동작</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {libraryListRows.map((item) => {
+                      const latestVersion = item.versions[0];
+                      return (
+                        <tr id={`groupware-library-item-${item.id}`} key={item.id}>
+                          <td>
+                            <div className="groupware-row-title">
+                              <Link href={libraryHref(item.id)}>{item.title}</Link>
+                              {item.description ? <span className="groupware-table-meta">{item.description}</span> : null}
+                              <div className="actions-row groupware-row-badges">
+                                {item.isPinned ? <span className="status-pill yellow">중요</span> : null}
+                                {item.isArchived ? <span className="status-pill gray">보관</span> : null}
+                                {item.team ? <span className="status-pill gray">{item.team.name}</span> : null}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="status-pill gray">{libraryCategoryLabel(item.category)}</span>
+                            <br />
+                            <span className="muted">{libraryScopeLabel(item.accessScope)}</span>
+                          </td>
+                          <td>
+                            <strong>{item.versions.length}개</strong>
+                            {latestVersion ? (
+                              <p className="muted groupware-table-meta">
+                                최신 v{latestVersion.versionNo} · {latestVersion.originalName}
+                              </p>
                             ) : null}
-                            <a className="button secondary" href={`/api/groupware/library/versions/${version.id}`}>
-                              <Download size={14} />
-                              v{version.versionNo} {version.originalName}
-                            </a>
-                            {version.isHidden ? <span className="status-pill gray">숨김</span> : null}
-                            <span className="muted">
-                              {version.uploadedBy.name} · 다운로드 {version.downloadCount}회 · {formatKstDateTime(version.createdAt)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                          </td>
+                          <td>
+                            {item.downloadCount}회
+                            {groupware.canManageGroupware ? (
+                              <p className="muted groupware-table-meta">
+                                접근 가능 {item.accessPreview.totalCount}명
+                                {item.permissionTest ? ` · ${item.permissionTest.user.name}: ${item.permissionTest.canAccess ? "가능" : "불가"}` : ""}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td>{formatKstDateTime(item.updatedAt)}</td>
+                          <td>
+                            <div className="actions-row groupware-row-actions">
+                              <Link className="button secondary" href={libraryHref(item.id)}>
+                                상세
+                              </Link>
+                              {latestVersion && canPreviewAttachment(latestVersion) ? (
+                                <a className="button secondary" href={`/api/groupware/library/versions/${latestVersion.id}?preview=1`} target="_blank" rel="noreferrer">
+                                  미리보기
+                                </a>
+                              ) : null}
+                              {latestVersion ? (
+                                <a className="button secondary" href={`/api/groupware/library/versions/${latestVersion.id}`}>
+                                  <Download size={14} />
+                                  v{latestVersion.versionNo}
+                                </a>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="empty">조건에 맞는 자료가 없습니다.</div>
@@ -1708,23 +1917,33 @@ export function GroupwarePanel({
             ) : null}
             {groupware.canManageGroupware ? (
               groupware.operationLogs.length > 0 ? (
-                <div className="stack" style={{ gap: 8 }}>
-                  {groupware.operationLogs.map((log) => (
-                    <div className="notification-card read groupware-operation-card" key={log.id}>
-                      <div className="groupware-card-main">
-                        <div className="actions-row groupware-card-title">
-                          <span className="status-pill gray">{log.label}</span>
-                          <strong>{log.detail}</strong>
-                        </div>
-                        <p className="muted" style={{ margin: "6px 0 0" }}>
-                          {log.actor?.name ?? "시스템"} · {formatKstDateTime(log.createdAt)}
-                        </p>
-                        <p className="muted" style={{ margin: "6px 0 0" }}>
-                          대상 {log.targetType} · {log.targetId}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="table-wrap groupware-board-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>작업</th>
+                        <th>내용</th>
+                        <th>행위자</th>
+                        <th>대상</th>
+                        <th>일시</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupware.operationLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td><span className="status-pill gray">{log.label}</span></td>
+                          <td><span className="groupware-table-meta">{log.detail}</span></td>
+                          <td>{log.actor?.name ?? "시스템"}</td>
+                          <td>
+                            {log.targetType}
+                            <br />
+                            <span className="muted">{log.targetId}</span>
+                          </td>
+                          <td>{formatKstDateTime(log.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="empty">아직 운영 로그가 없습니다.</div>
@@ -1742,23 +1961,44 @@ export function GroupwarePanel({
               <span className="status-pill gray">{groupware.profileMemoThreads.length}건</span>
             </div>
             {groupware.profileMemoThreads.length > 0 ? (
-              <div className="stack" style={{ gap: 8 }}>
-                {groupware.profileMemoThreads.slice(0, 6).map((thread) => (
-                  <Link className="notification-card" href={thread.href} key={thread.id} style={{ textDecoration: "none" }}>
-                    <div>
-                      <strong>{thread.targetUser?.name ?? thread.title}</strong>
-                      <p className="muted" style={{ margin: "6px 0 0" }}>
-                        {thread.lastComment?.body ?? "메모 내용 없음"}
-                      </p>
-                      <p className="muted" style={{ margin: "6px 0 0" }}>
-                        담당 {thread.assignee?.name ?? "미지정"} · {thread.lastCommentAt ? formatKstDateTime(thread.lastCommentAt) : formatKstDateTime(thread.updatedAt)}
-                      </p>
-                    </div>
-                    <span className={`status-pill ${workThreadStatusTone(thread.status)}`}>
-                      {workThreadStatusLabel(thread.status)}
-                    </span>
-                  </Link>
-                ))}
+              <div className="table-wrap groupware-board-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>대상/제목</th>
+                      <th>상태</th>
+                      <th>담당</th>
+                      <th>최근 메모</th>
+                      <th>업데이트</th>
+                      <th>동작</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupware.profileMemoThreads.slice(0, 12).map((thread) => (
+                      <tr key={thread.id}>
+                        <td>
+                          <div className="groupware-row-title">
+                            <Link href={thread.href}>{thread.targetUser?.name ?? thread.title}</Link>
+                            <span className="groupware-table-meta">{thread.title}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${workThreadStatusTone(thread.status)}`}>
+                            {workThreadStatusLabel(thread.status)}
+                          </span>
+                        </td>
+                        <td>{thread.assignee?.name ?? "미지정"}</td>
+                        <td><span className="groupware-table-meta">{thread.lastComment?.body ?? "메모 내용 없음"}</span></td>
+                        <td>{thread.lastCommentAt ? formatKstDateTime(thread.lastCommentAt) : formatKstDateTime(thread.updatedAt)}</td>
+                        <td>
+                          <Link className="button secondary" href={thread.href}>
+                            열기
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="empty">아직 프로필 메모가 없습니다.</div>

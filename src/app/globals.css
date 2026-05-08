@@ -709,6 +709,98 @@ td {
   color: var(--primary);
 }
 
+.groupware-overview-hub {
+  gap: 14px;
+}
+
+.groupware-hub-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.groupware-hub-shortcuts a {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 12px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.groupware-hub-shortcuts a:hover {
+  border-color: rgba(59, 130, 246, 0.32);
+  color: var(--primary);
+}
+
+.groupware-hub-shortcuts span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.groupware-board-table table {
+  min-width: 920px;
+}
+
+.groupware-board-table th {
+  white-space: nowrap;
+}
+
+.groupware-board-table td {
+  vertical-align: top;
+}
+
+.groupware-row-title {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.groupware-row-title > a {
+  color: #111827;
+  font-weight: 850;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.groupware-row-title > a:hover {
+  color: var(--primary);
+}
+
+.groupware-table-meta {
+  display: block;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.groupware-row-badges {
+  gap: 6px;
+}
+
+.groupware-row-actions {
+  align-items: center;
+  gap: 6px;
+}
+
+.groupware-row-actions .button,
+.groupware-row-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .groupware-search-presets,
 .groupware-search-preset-actions,
 .groupware-approval-actions,
@@ -1254,6 +1346,14 @@ td {
     min-height: 44px;
     padding: 0 8px;
     font-size: 12px;
+  }
+
+  .groupware-hub-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .groupware-board-table table {
+    min-width: 820px;
   }
 
   .groupware-section-nav {
