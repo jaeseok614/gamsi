@@ -746,6 +746,121 @@ td {
   font-size: 12px;
 }
 
+.groupware-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.groupware-summary-section {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.groupware-summary-section:last-child {
+  grid-column: 1 / -1;
+}
+
+.groupware-summary-header,
+.groupware-summary-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.groupware-summary-header .button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.groupware-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.groupware-summary-row {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  color: #1f2937;
+  text-decoration: none;
+}
+
+.groupware-summary-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.groupware-summary-row:hover .groupware-summary-title {
+  color: var(--primary);
+}
+
+.groupware-summary-title {
+  font-weight: 850;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.groupware-summary-title .status-pill {
+  flex: 0 0 auto;
+}
+
+.groupware-compose-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.groupware-compose-panel > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  color: #1f2937;
+  cursor: pointer;
+  font-weight: 850;
+  list-style: none;
+}
+
+.groupware-compose-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.groupware-compose-panel[open] > summary {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.groupware-compose-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.groupware-compose-helper {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.groupware-compose-body {
+  padding: 14px;
+}
+
 .groupware-board-table table {
   min-width: 920px;
 }
@@ -1350,6 +1465,26 @@ td {
 
   .groupware-hub-shortcuts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .groupware-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .groupware-summary-section:last-child {
+    grid-column: auto;
+  }
+
+  .groupware-summary-header {
+    align-items: flex-start;
+  }
+
+  .groupware-compose-panel > summary {
+    min-height: 52px;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 12px;
   }
 
   .groupware-board-table table {
