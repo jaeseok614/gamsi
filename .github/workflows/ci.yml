@@ -87,7 +87,7 @@ jobs:
 
       - name: Start app
         run: |
-          npm run start > /tmp/workguard-next.log 2>&1 &
+          setsid npm run start > /tmp/workguard-next.log 2>&1 &
           echo $! > /tmp/workguard-next.pid
           for i in {1..60}; do
             if curl -fsS http://localhost:3000/api/health >/dev/null; then
@@ -105,7 +105,10 @@ jobs:
         if: always()
         run: |
           if [ -f /tmp/workguard-next.pid ]; then
-            kill "$(cat /tmp/workguard-next.pid)" || true
+            pid="$(cat /tmp/workguard-next.pid)"
+            kill -TERM "-$pid" || true
+            sleep 2
+            kill -KILL "-$pid" || true
           fi
           for i in {1..20}; do
             if ! curl -fsS http://localhost:3000/api/health >/dev/null; then
