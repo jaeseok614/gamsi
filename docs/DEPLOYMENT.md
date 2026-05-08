@@ -16,6 +16,7 @@ Required:
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
+- `AUTH_COOKIE_SECURE=true`
 - `APP_BASE_URL`
 
 Recommended:
@@ -27,6 +28,7 @@ Recommended:
 Production rules:
 
 - `APP_BASE_URL` must be the public `https://` origin.
+- `AUTH_COOKIE_SECURE` must be `true` behind HTTPS. Local Docker HTTP rehearsals may set it to `false`.
 - `AUTH_SECRET` must be 32+ random characters and must not include any placeholder text.
 - Production attachments should use an S3-compatible private bucket. Keep `S3_KEY_PREFIX` unique per environment, and grant the app `PutObject`/`GetObject` only for that prefix.
 - Do not commit `.env.production`.

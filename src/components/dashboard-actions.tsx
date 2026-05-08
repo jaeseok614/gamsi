@@ -4046,23 +4046,8 @@ export function PwaInstallCard({
   quickApprovals?: MobileQuickApproval[];
 }) {
   const [promptEvent, setPromptEvent] = useState<DeferredPromptEvent | null>(null);
-  const [isStandalone, setIsStandalone] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return (
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-    );
-  });
-  const [isOnline, setIsOnline] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-
-    return window.navigator.onLine;
-  });
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [message, setMessage] = useState("");
   const [queueCount, setQueueCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -4074,6 +4059,13 @@ export function PwaInstallCard({
     if (typeof window === "undefined") {
       return;
     }
+
+    const standaloneTimeout = window.setTimeout(() => {
+      setIsStandalone(
+        window.matchMedia("(display-mode: standalone)").matches ||
+          (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+      );
+    }, 0);
 
     const handleBeforeInstallPrompt = (event: DeferredPromptEvent) => {
       event.preventDefault();
@@ -4090,6 +4082,7 @@ export function PwaInstallCard({
     window.addEventListener("appinstalled", handleInstalled);
 
     return () => {
+      window.clearTimeout(standaloneTimeout);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleInstalled);
     };
@@ -4106,6 +4099,7 @@ export function PwaInstallCard({
       setQueueCount(queue.length);
       setLastSyncAt(meta.lastSyncAt);
       setDraftUpdatedAt(readAdjustmentDraft()?.updatedAt ?? null);
+      setIsOnline(window.navigator.onLine);
     };
 
     const handleOnline = () => {

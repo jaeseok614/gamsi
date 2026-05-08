@@ -22,6 +22,10 @@ services:
     profiles:
       - app
       - e2e
+    networks:
+      default:
+        aliases:
+          - workguard-web
     depends_on:
       db:
         condition: service_healthy
@@ -30,6 +34,7 @@ services:
       DATABASE_URL: postgresql://gamsi:gamsi@db:5432/gamsi?schema=public
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET:-local-docker-secret-change-before-production-32chars}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -41,7 +46,7 @@ services:
       WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
       ATTACHMENT_UPLOAD_ROOT: /app/data/uploads/approval-attachments
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     volumes:
       - gamsi_uploads:/app/data/uploads
     command: ["/bin/sh", "-c", "npm run db:push && npm run db:seed-if-empty && npm run start"]
@@ -65,7 +70,7 @@ services:
     environment:
       CI: "true"
       DATABASE_URL: postgresql://gamsi:gamsi@db:5432/gamsi?schema=public
-      PLAYWRIGHT_BASE_URL: http://app:3000
+      PLAYWRIGHT_BASE_URL: http://workguard-web:3000
       PLAYWRIGHT_WORKERS: ${PLAYWRIGHT_WORKERS:-1}
       PLAYWRIGHT_WEB_SERVER: "false"
       AUTH_SECRET: ${AUTH_SECRET:-local-docker-secret-change-before-production-32chars}

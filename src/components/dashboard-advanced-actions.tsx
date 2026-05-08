@@ -3,7 +3,7 @@
 import { CheckCircle2, Save, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { roleLabel } from "@/lib/display-labels";
 
@@ -284,17 +284,19 @@ function dashboardApprovalsHref(filters?: ApprovalFilters, approvalId?: string) 
 
 export function ApprovalFilterPresetBar({ filters }: { filters: ApprovalFilters }) {
   const router = useRouter();
-  const [presets, setPresets] = useState<FilterPreset[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
+  const [presets, setPresets] = useState<FilterPreset[]>([]);
 
-    try {
-      return JSON.parse(window.localStorage.getItem(PRESET_KEY) ?? "[]") as FilterPreset[];
-    } catch {
-      return [];
-    }
-  });
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        setPresets(JSON.parse(window.localStorage.getItem(PRESET_KEY) ?? "[]") as FilterPreset[]);
+      } catch {
+        setPresets([]);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   function sync(next: FilterPreset[]) {
     setPresets(next);

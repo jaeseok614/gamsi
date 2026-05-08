@@ -46,7 +46,7 @@ export function QrDisplayClient({ locations }: { locations: WorkLocationOption[]
   const activeLocations = useMemo(() => locations.filter((location) => location.isActive), [locations]);
   const [selectedLocationId, setSelectedLocationId] = useState(activeLocations[0]?.id ?? "");
   const [issuedToken, setIssuedToken] = useState<IssuedQrToken | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
   const [message, setMessage] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 

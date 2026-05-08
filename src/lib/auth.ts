@@ -43,10 +43,12 @@ function sessionExpiresAt() {
 }
 
 function sessionCookieOptions() {
+  const configuredSecure = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase();
+
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: configuredSecure ? configuredSecure === "true" : process.env.NODE_ENV === "production",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS
   };

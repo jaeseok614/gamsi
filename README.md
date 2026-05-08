@@ -18,6 +18,8 @@ Docker로 앱까지 한 번에 확인하려면 아래 명령을 사용합니다.
 docker compose --profile app up -d app
 ```
 
+호스트 3000번 포트가 이미 사용 중이면 `APP_PORT=3006 docker compose --profile app up -d app`처럼 바꿔서 실행할 수 있습니다.
+
 Playwright E2E는 브라우저와 네트워크 제약을 피하도록 전용 Docker 프로필로 고정했습니다.
 
 ```bash
@@ -101,6 +103,7 @@ WEB_PUSH_VAPID_PRIVATE_KEY="..."
 - 데모 데이터 초기화는 로컬에서 `npm run db:reset-demo`를 사용합니다. 운영 환경에서는 기본적으로 차단됩니다.
 - 현장 출퇴근 큐는 `IndexedDB + background sync`를 사용합니다. 서버 충돌이 난 항목은 자동 재전송하지 않고 `확인 필요` 상태로 남깁니다.
 - 운영 체크리스트는 [docs/OPERATIONS.md](docs/OPERATIONS.md)에 정리되어 있습니다.
+- 고객 시연과 관리자 초기 세팅, 장애 대응, 백업/복구 리허설은 [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md)에 정리되어 있습니다.
 - Docker VPS 배포 절차는 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)에 정리되어 있습니다.
 - GitHub, 도메인, VPS가 정해진 뒤 진행할 후속 작업은 [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md)에 정리되어 있습니다.
 
