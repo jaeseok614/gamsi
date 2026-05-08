@@ -608,6 +608,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const groupwareAnnouncementId = firstValue(query.groupwareAnnouncementId) ?? "";
   const groupwareLibraryItemId = firstValue(query.groupwareLibraryItemId) ?? "";
   const groupwareDocumentId = firstValue(query.groupwareDocumentId) ?? "";
+  const groupwareCompose = firstValue(query.groupwareCompose) ?? "";
   const groupwareOperationAction = firstValue(query.groupwareOperationAction) ?? "ALL";
   const groupwareOperationActorId = firstValue(query.groupwareOperationActorId) ?? "";
   const groupwareOperationFrom = firstValue(query.groupwareOperationFrom) ?? "";
@@ -983,6 +984,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               selectedAnnouncementId={groupwareAnnouncementId}
               selectedLibraryItemId={groupwareLibraryItemId}
               selectedDocumentId={groupwareDocumentId}
+              groupwareCompose={groupwareCompose}
             />
           </section>
         ) : null}

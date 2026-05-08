@@ -815,50 +815,18 @@ td {
   flex: 0 0 auto;
 }
 
-.groupware-compose-panel {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.groupware-compose-panel > summary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 14px;
-  color: #1f2937;
-  cursor: pointer;
-  font-weight: 850;
-  list-style: none;
-}
-
-.groupware-compose-panel > summary::-webkit-details-marker {
-  display: none;
-}
-
-.groupware-compose-panel[open] > summary {
-  border-bottom: 1px solid var(--line);
-  background: #ffffff;
-}
-
-.groupware-compose-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.groupware-compose-helper {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+.groupware-compose-screen {
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .groupware-compose-body {
-  padding: 14px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 16px;
 }
 
 .groupware-board-table table {
@@ -1479,12 +1447,8 @@ td {
     align-items: flex-start;
   }
 
-  .groupware-compose-panel > summary {
-    min-height: 52px;
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
-    padding: 10px 12px;
+  .groupware-compose-screen {
+    max-width: none;
   }
 
   .groupware-board-table table {

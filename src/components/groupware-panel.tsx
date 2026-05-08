@@ -54,6 +54,7 @@ export type GroupwareTab =
   | "library"
   | "operations";
 type NoticeFilter = "ALL" | "UNREAD" | "READ" | "SCHEDULED" | "EXPIRED";
+type GroupwareComposeMode = "announcement" | "board" | "document" | "library" | "performance" | "payroll" | "memo";
 type OverviewSummaryRow = {
   id: string;
   title: string;
@@ -86,6 +87,7 @@ function groupwareHref(params?: {
   announcementId?: string | null;
   libraryItemId?: string | null;
   documentId?: string | null;
+  compose?: string | null;
 }) {
   const search = new URLSearchParams();
   search.set("view", "groupware");
@@ -155,6 +157,9 @@ function groupwareHref(params?: {
   if (params?.documentId) {
     search.set("groupwareDocumentId", params.documentId);
   }
+  if (params?.compose) {
+    search.set("groupwareCompose", params.compose);
+  }
   return `/dashboard?${search.toString()}`;
 }
 
@@ -218,7 +223,8 @@ export function GroupwarePanel({
   librarySearch,
   selectedAnnouncementId,
   selectedLibraryItemId,
-  selectedDocumentId
+  selectedDocumentId,
+  groupwareCompose
 }: {
   organization: OrganizationSummary;
   groupware: GroupwareSummary;
@@ -232,8 +238,12 @@ export function GroupwarePanel({
   selectedAnnouncementId: string;
   selectedLibraryItemId: string;
   selectedDocumentId: string;
+  groupwareCompose: string;
 }) {
   const selected = organization.selectedUser;
+  const normalizedComposeMode = (["announcement", "board", "document", "library", "performance", "payroll", "memo"] as const).includes(groupwareCompose as GroupwareComposeMode)
+    ? (groupwareCompose as GroupwareComposeMode)
+    : null;
   const selectedMemoStat = selected ? groupware.memoStatsByUser.find((item) => item.userId === selected.id) : null;
   const openProfileMemos = groupware.profileMemoThreads.filter((thread) => thread.status === "OPEN");
   const selectedProfileMemos = selected
@@ -310,6 +320,15 @@ export function GroupwarePanel({
     { key: "library", label: "자료실", count: groupware.libraryItems.length },
     { key: "operations", label: "급여·운영", count: openProfileMemos.length + groupware.payrollIssues.length }
   ];
+  const isAnnouncementCompose = activeTab === "announcements" && normalizedComposeMode === "announcement" && groupware.canManageGroupware;
+  const isBoardCompose = activeTab === "announcements" && normalizedComposeMode === "board";
+  const isDocumentCompose = activeTab === "documents" && normalizedComposeMode === "document";
+  const isLibraryCompose = activeTab === "library" && normalizedComposeMode === "library" && groupware.canManageGroupware;
+  const isMemoCompose = activeTab === "operations" && normalizedComposeMode === "memo" && Boolean(selected);
+  const isPerformanceCompose = activeTab === "operations" && normalizedComposeMode === "performance" && groupware.canManageGroupware;
+  const isPayrollCompose = activeTab === "operations" && normalizedComposeMode === "payroll" && groupware.canViewPayrollForOthers;
+  const isAnnouncementsCompose = isAnnouncementCompose || isBoardCompose;
+  const isOperationsCompose = isMemoCompose || isPerformanceCompose || isPayrollCompose;
   const groupwareTabHref = (tab: GroupwareTab) =>
     groupwareHref({
       tab,
@@ -334,6 +353,23 @@ export function GroupwarePanel({
       tab: "documents",
       documentId
     })}#groupware-documents`;
+  const noticeListHref = `${groupwareHref({
+    tab: "announcements",
+    noticeFilter: normalizedNoticeFilter
+  })}#groupware-announcements`;
+  const boardListHref = `${groupwareHref({
+    tab: "announcements"
+  })}#groupware-board`;
+  const documentListHref = `${groupwareHref({
+    tab: "documents"
+  })}#groupware-documents`;
+  const libraryListHref = `${groupwareHref({
+    tab: "library",
+    libraryCategory: normalizedLibraryCategory,
+    librarySearch,
+    libraryStatus: groupware.libraryFilters.status,
+    libraryPermissionUserId: groupware.libraryFilters.permissionUserId
+  })}#groupware-library`;
   const operationExportHref = `/api/groupware/operations/export?${new URLSearchParams({
     action: groupware.operationFilters.action,
     actorId: groupware.operationFilters.actorId,
@@ -492,17 +528,29 @@ export function GroupwarePanel({
       })}
     </div>
   );
-  const composeDisclosure = (label: string, children: ReactNode, helper?: string) => (
-    <details className="groupware-compose-panel">
-      <summary>
-        <span className="groupware-compose-trigger">
-          <PlusCircle size={16} />
-          {label}
-        </span>
-        {helper ? <span className="groupware-compose-helper">{helper}</span> : null}
-      </summary>
+  const composeScreen = ({
+    title,
+    description,
+    backHref,
+    children
+  }: {
+    title: string;
+    description: string;
+    backHref: string;
+    children: ReactNode;
+  }) => (
+    <section id="groupware-compose" className="panel stack groupware-compose-screen">
+      <div className="actions-row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2 style={{ margin: 0 }}>{title}</h2>
+          <p className="muted" style={{ margin: "6px 0 0" }}>{description}</p>
+        </div>
+        <Link className="button secondary" href={backHref}>
+          목록으로
+        </Link>
+      </div>
       <div className="groupware-compose-body">{children}</div>
-    </details>
+    </section>
   );
   const overviewSummaryList = ({
     title,
@@ -1053,7 +1101,7 @@ export function GroupwarePanel({
         </>
       ) : null}
 
-      {activeTab === "operations" ? (
+      {activeTab === "operations" && !isOperationsCompose ? (
         <nav className="groupware-section-nav" aria-label="급여·운영 섹션">
           <a href="#groupware-contacts">연락처</a>
           <a href="#groupware-profile">직원 메모</a>
@@ -1064,7 +1112,7 @@ export function GroupwarePanel({
         </nav>
       ) : null}
 
-      {activeTab === "operations" ? (
+      {activeTab === "operations" && !isOperationsCompose ? (
       <form action="/dashboard" className="panel inline-form">
         <input type="hidden" name="view" value="groupware" />
         <input type="hidden" name="groupwareTab" value={activeTab} />
@@ -1103,7 +1151,25 @@ export function GroupwarePanel({
       ) : null}
 
       <div className="stack">
-        {activeTab === "announcements" ? (
+        {isAnnouncementCompose
+          ? composeScreen({
+            title: "공지 작성",
+            description: "회사 공식 안내와 인사 공지를 작성합니다.",
+            backHref: noticeListHref,
+            children: <AnnouncementForm teams={organization.selectableTeams} mode="announcement" canManage={groupware.canManageGroupware} />
+          })
+          : null}
+
+        {isBoardCompose
+          ? composeScreen({
+            title: "게시글 작성",
+            description: "팀 공유 글과 구성원 게시글을 작성합니다.",
+            backHref: boardListHref,
+            children: <AnnouncementForm teams={organization.selectableTeams} mode="board" canManage={groupware.canManageGroupware} />
+          })
+          : null}
+
+        {activeTab === "announcements" && !isAnnouncementsCompose ? (
           <div id="groupware-announcements" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <div>
@@ -1112,7 +1178,22 @@ export function GroupwarePanel({
                 </h2>
                 <p className="muted" style={{ margin: "6px 0 0" }}>회사 공식 안내와 인사 공지를 확인합니다.</p>
               </div>
-              <span className="status-pill gray">공식 공지 {noticeAnnouncements.length}건</span>
+              <div className="actions-row">
+                <span className="status-pill gray">공식 공지 {noticeAnnouncements.length}건</span>
+                {groupware.canManageGroupware ? (
+                  <Link
+                    className="button"
+                    href={`${groupwareHref({
+                      tab: "announcements",
+                      compose: "announcement",
+                      noticeFilter: normalizedNoticeFilter
+                    })}#groupware-compose`}
+                  >
+                    <PlusCircle size={16} />
+                    공지 작성
+                  </Link>
+                ) : null}
+              </div>
             </div>
             <nav className="groupware-section-nav" aria-label="공지사항 내부 섹션">
               <a href="#groupware-announcements">공지</a>
@@ -1138,13 +1219,6 @@ export function GroupwarePanel({
                 </button>
               </div>
             </form>
-            {groupware.canManageGroupware
-              ? composeDisclosure(
-                "공지 작성",
-                <AnnouncementForm teams={organization.selectableTeams} mode="announcement" canManage={groupware.canManageGroupware} />,
-                "공식 공지는 필요할 때만 작성 창을 열어 발행합니다."
-              )
-              : null}
             {activeSelectedNotice ? announcementCards([activeSelectedNotice], "선택한 공지사항을 찾을 수 없습니다.", "detail") : null}
             {selectedAnnouncementId && !selectedAnnouncement && activeTab === "announcements" ? (
               <div className="empty">선택한 공지사항을 찾을 수 없거나 접근 권한이 없습니다.</div>
@@ -1156,7 +1230,7 @@ export function GroupwarePanel({
           </div>
         ) : null}
 
-        {activeTab === "announcements" ? (
+        {activeTab === "announcements" && !isAnnouncementsCompose ? (
           <div id="groupware-board" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <div>
@@ -1165,13 +1239,20 @@ export function GroupwarePanel({
                 </h2>
                 <p className="muted" style={{ margin: "6px 0 0" }}>팀 공유 글과 구성원 게시글을 공지와 분리해 봅니다.</p>
               </div>
-              <span className="status-pill gray">게시글 {boardAnnouncements.length}건</span>
+              <div className="actions-row">
+                <span className="status-pill gray">게시글 {boardAnnouncements.length}건</span>
+                <Link
+                  className="button"
+                  href={`${groupwareHref({
+                    tab: "announcements",
+                    compose: "board"
+                  })}#groupware-compose`}
+                >
+                  <PlusCircle size={16} />
+                  게시글 작성
+                </Link>
+              </div>
             </div>
-            {composeDisclosure(
-              "게시글 작성",
-              <AnnouncementForm teams={organization.selectableTeams} mode="board" canManage={groupware.canManageGroupware} />,
-              "목록을 먼저 확인한 뒤 새 공유 글을 작성합니다."
-            )}
             {activeSelectedBoardPost ? announcementCards([activeSelectedBoardPost], "선택한 게시글을 찾을 수 없습니다.", "detail") : null}
             {announcementTable(
               boardAnnouncements.filter((announcement) => announcement.id !== activeSelectedBoardPost?.id),
@@ -1180,7 +1261,40 @@ export function GroupwarePanel({
           </div>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {isMemoCompose && selected
+          ? composeScreen({
+            title: "메모 추가",
+            description: `${selected.name} 직원에게 남길 이슈나 후속 업무를 작성합니다.`,
+            backHref: `${groupwareHref({ tab: "operations", userId: selected.id, teamId: organization.filters.teamId, search: organization.filters.search })}#groupware-profile`,
+            children: (
+              <ProfileMemoForm
+                targetUserId={selected.id}
+                mentionableUsers={mentionableUsers}
+                assignableUsers={assignableUsers}
+              />
+            )
+          })
+          : null}
+
+        {isPerformanceCompose
+          ? composeScreen({
+            title: "실적 목표 등록",
+            description: "이번 달 직원 또는 팀 목표를 등록합니다.",
+            backHref: `${groupwareHref({ tab: "operations", userId: selected?.id ?? viewerId, teamId: organization.filters.teamId, search: organization.filters.search })}#groupware-performance`,
+            children: <PerformanceGoalForm currentMonth={groupware.currentMonth} users={contactOptions} teams={organization.selectableTeams} />
+          })
+          : null}
+
+        {isPayrollCompose
+          ? composeScreen({
+            title: "급여명세 발행",
+            description: "대상 직원과 월을 선택해 급여명세를 발행합니다.",
+            backHref: `${groupwareHref({ tab: "operations", userId: selected?.id ?? viewerId, teamId: organization.filters.teamId, search: organization.filters.search })}#groupware-payroll-statements`,
+            children: <PayrollIssueForm currentMonth={groupware.currentMonth} users={contactOptions} />
+          })
+          : null}
+
+        {activeTab === "operations" && !isOperationsCompose ? (
           <div id="groupware-contacts" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>
@@ -1248,7 +1362,7 @@ export function GroupwarePanel({
           </div>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {activeTab === "operations" && !isOperationsCompose ? (
           <section id="groupware-profile" className="panel stack">
             {selected ? (
               <>
@@ -1290,17 +1404,23 @@ export function GroupwarePanel({
                 <div className="stack">
                   <div className="actions-row" style={{ justifyContent: "space-between" }}>
                     <h3 style={{ margin: 0 }}>미결건 메모</h3>
-                    <span className="status-pill gray">{selectedMemoStat?.openCount ?? 0}건</span>
+                    <div className="actions-row">
+                      <span className="status-pill gray">{selectedMemoStat?.openCount ?? 0}건</span>
+                      <Link
+                        className="button"
+                        href={`${groupwareHref({
+                          tab: "operations",
+                          userId: selected.id,
+                          teamId: organization.filters.teamId,
+                          search: organization.filters.search,
+                          compose: "memo"
+                        })}#groupware-compose`}
+                      >
+                        <PlusCircle size={16} />
+                        메모 추가
+                      </Link>
+                    </div>
                   </div>
-                  {composeDisclosure(
-                    "메모 추가",
-                    <ProfileMemoForm
-                      targetUserId={selected.id}
-                      mentionableUsers={mentionableUsers}
-                      assignableUsers={assignableUsers}
-                    />,
-                    "직원별 이슈나 후속 업무가 있을 때만 작성 창을 엽니다."
-                  )}
                 </div>
                 {selectedProfileMemos.length > 0 ? (
                   <div className="stack" style={{ gap: 8 }}>
@@ -1329,21 +1449,31 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {activeTab === "operations" && !isOperationsCompose ? (
           <section id="groupware-performance" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>
                 <Target size={20} /> 실적관리
               </h2>
-              <span className="status-pill gray">{groupware.performanceGoals.length}건</span>
+              <div className="actions-row">
+                <span className="status-pill gray">{groupware.performanceGoals.length}건</span>
+                {groupware.canManageGroupware ? (
+                  <Link
+                    className="button"
+                    href={`${groupwareHref({
+                      tab: "operations",
+                      userId: selected?.id ?? viewerId,
+                      teamId: organization.filters.teamId,
+                      search: organization.filters.search,
+                      compose: "performance"
+                    })}#groupware-compose`}
+                  >
+                    <PlusCircle size={16} />
+                    목표 등록
+                  </Link>
+                ) : null}
+              </div>
             </div>
-            {groupware.canManageGroupware
-              ? composeDisclosure(
-                "실적 목표 등록",
-                <PerformanceGoalForm currentMonth={groupware.currentMonth} users={contactOptions} teams={organization.selectableTeams} />,
-                "목표 목록을 확인한 뒤 새 목표를 추가합니다."
-              )
-              : null}
             {groupware.performanceGoals.length > 0 ? (
               <div className="stack" style={{ gap: 8 }}>
                 {groupware.performanceGoals.map((goal) => (
@@ -1367,19 +1497,29 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {activeTab === "operations" && !isOperationsCompose ? (
           <section id="groupware-payroll-statements" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>급여명세 다운로드</h2>
-              <span className="status-pill gray">{payrollTargetUserId === viewerId ? "본인" : selected?.name}</span>
+              <div className="actions-row">
+                <span className="status-pill gray">{payrollTargetUserId === viewerId ? "본인" : selected?.name}</span>
+                {groupware.canViewPayrollForOthers ? (
+                  <Link
+                    className="button"
+                    href={`${groupwareHref({
+                      tab: "operations",
+                      userId: selected?.id ?? viewerId,
+                      teamId: organization.filters.teamId,
+                      search: organization.filters.search,
+                      compose: "payroll"
+                    })}#groupware-compose`}
+                  >
+                    <PlusCircle size={16} />
+                    명세 발행
+                  </Link>
+                ) : null}
+              </div>
             </div>
-            {groupware.canViewPayrollForOthers
-              ? composeDisclosure(
-                "급여명세 발행",
-                <PayrollIssueForm currentMonth={groupware.currentMonth} users={contactOptions} />,
-                "기존 발행 내역을 확인한 뒤 새 명세를 발행합니다."
-              )
-              : null}
             {groupware.payrollIssues.length > 0 ? (
               <div className="table-wrap groupware-board-table">
                 <table>
@@ -1450,19 +1590,35 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "documents" ? (
+        {isDocumentCompose
+          ? composeScreen({
+            title: "전자결재 상신",
+            description: "새 결재 문서를 작성하고 결재자에게 상신합니다.",
+            backHref: documentListHref,
+            children: <DocumentRequestForm reviewers={assignableUsers} />
+          })
+          : null}
+
+        {activeTab === "documents" && !isDocumentCompose ? (
           <section id="groupware-documents" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>
                 <FileText size={20} /> 전자결재
               </h2>
-              <span className="status-pill gray">대기 {pendingDocuments.length}건</span>
+              <div className="actions-row">
+                <span className="status-pill gray">대기 {pendingDocuments.length}건</span>
+                <Link
+                  className="button"
+                  href={`${groupwareHref({
+                    tab: "documents",
+                    compose: "document"
+                  })}#groupware-compose`}
+                >
+                  <PlusCircle size={16} />
+                  결재 상신
+                </Link>
+              </div>
             </div>
-            {composeDisclosure(
-              "전자결재 상신",
-              <DocumentRequestForm reviewers={assignableUsers} />,
-              "기존 문서를 확인한 뒤 새 결재 문서를 올립니다."
-            )}
             {selectedDocument ? (
               <div id={`groupware-document-${selectedDocument.id}`} className="notification-card read groupware-detail-card">
                 <div className="groupware-card-main">
@@ -1637,13 +1793,45 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "library" ? (
+        {isLibraryCompose
+          ? composeScreen({
+            title: "자료 등록",
+            description: "자료실에 새 파일 또는 새 버전을 등록합니다.",
+            backHref: libraryListHref,
+            children: (
+              <DocumentLibraryForm
+                items={groupware.libraryItems.map((item) => ({ id: item.id, title: item.title }))}
+                teams={organization.selectableTeams}
+              />
+            )
+          })
+          : null}
+
+        {activeTab === "library" && !isLibraryCompose ? (
           <section id="groupware-library" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>
                 <FolderOpen size={20} /> 자료실
               </h2>
-              <span className="status-pill gray">{filteredLibraryItems.length}건</span>
+              <div className="actions-row">
+                <span className="status-pill gray">{filteredLibraryItems.length}건</span>
+                {groupware.canManageGroupware ? (
+                  <Link
+                    className="button"
+                    href={`${groupwareHref({
+                      tab: "library",
+                      libraryCategory: normalizedLibraryCategory,
+                      librarySearch,
+                      libraryStatus: groupware.libraryFilters.status,
+                      libraryPermissionUserId: groupware.libraryFilters.permissionUserId,
+                      compose: "library"
+                    })}#groupware-compose`}
+                  >
+                    <PlusCircle size={16} />
+                    자료 등록
+                  </Link>
+                ) : null}
+              </div>
             </div>
             {groupware.canManageGroupware ? (
               <nav className="dashboard-tabs" aria-label="자료실 상태">
@@ -1714,16 +1902,6 @@ export function GroupwarePanel({
                 </div>
               ) : null}
             </form>
-            {groupware.canManageGroupware
-              ? composeDisclosure(
-                "자료 등록",
-                <DocumentLibraryForm
-                  items={groupware.libraryItems.map((item) => ({ id: item.id, title: item.title }))}
-                  teams={organization.selectableTeams}
-                />,
-                "자료 목록과 권한을 확인한 뒤 새 파일을 올립니다."
-              )
-              : null}
             {selectedLibraryItem ? (
               <div id={`groupware-library-item-${selectedLibraryItem.id}`} className="notification-card read groupware-detail-card">
                 <div className="groupware-card-main">
@@ -1931,7 +2109,7 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {activeTab === "operations" && !isOperationsCompose ? (
           <section id="groupware-operations" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>
@@ -2023,7 +2201,7 @@ export function GroupwarePanel({
           </section>
         ) : null}
 
-        {activeTab === "operations" ? (
+        {activeTab === "operations" && !isOperationsCompose ? (
           <section id="groupware-memos" className="panel stack">
             <div className="actions-row" style={{ justifyContent: "space-between" }}>
               <h2 style={{ margin: 0 }}>메모 타임라인</h2>
